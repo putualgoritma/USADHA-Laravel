@@ -45,6 +45,18 @@
                     {{ trans('global.product.fields.price_helper') }}
                 </p>
             </div>
+            <div class="form-group {{ $errors->has('discount') ? 'has-error' : '' }}">
+                <label for="discount">{{ trans('global.product.fields.discount') }}</label>
+                <input type="number" id="discount" name="discount" class="form-control" value="{{ old('discount', isset($product) ? $product->discount : '') }}" step="0.01">
+                @if($errors->has('discount'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('discount') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.product.fields.discount_helper') }}
+                </p>
+            </div>
             <!-- <div class="form-group {{ $errors->has('cogs') ? 'has-error' : '' }}">
                 <label for="cogs">{{ trans('global.product.fields.cogs') }}</label>
                 <input type="number" id="cogs" name="cogs" class="form-control" value="{{ old('cogs', isset($product) ? $product->cogs : '') }}" step="0.01">

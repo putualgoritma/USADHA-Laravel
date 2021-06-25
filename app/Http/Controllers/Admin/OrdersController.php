@@ -17,6 +17,7 @@ use App\Traits\TraitModel;
 use Berkayk\OneSignal\OneSignalClient;
 use Gate;
 use Illuminate\Http\Request;
+use App\Pairing;
 use Symfony\Component\HttpFoundation\Response;
 
 class OrdersController extends Controller
@@ -56,14 +57,14 @@ class OrdersController extends Controller
     {
         abort_if(Gate::denies('order_access'), Response::HTTP_FORBIDDEN, '403 Forbidden');
 
-        $dwn_arr=array();
-        //$data_row = $this->set_parent($request->input('ref_id'));   
-        //$data_row = $this->upparent_list($request->input('parent_id'), $dwn_arr);     
-        //$data_row = $this->upline_list($request->input('ref_id'), $dwn_arr, 1, 0);   
-        //$data_row = $this->downline_list($request->input('parent_id'), $dwn_arr, 1, 0); 
+        $dwn_arr = array();
+        //$data_row = $this->set_parent($request->input('ref_id'));
+        //$data_row = $this->upparent_list($request->input('parent_id'), $dwn_arr);
+        //$data_row = $this->upline_list($request->input('ref_id'), $dwn_arr, 1, 0);
+        //$data_row = $this->downline_list($request->input('parent_id'), $dwn_arr, 1, 0);
         //$data_row = $this->pairing_ref1($request->input('ref_id'),$request->input('pass'));
-        //$data_row = $this->pairing_group($request->input('parent_id'), $request->input('deep')); 
-        $data_row = $this->pairing_ref1_balance($request->input('ref_id'), $request->input('deep')); 
+        //$data_row = $this->pairing_group($request->input('parent_id'), $request->input('deep'));
+        //$data_row = $this->pairing_ref1_balance($request->input('ref_id'), $request->input('deep'));
         //$data_row = $this->pairing_down(0, $request->input('ref_id'), true);
         //$data_row = $this->pairing_up(0, $request->input('ref_id'), true);
         //$data_row = date('Y-m-d H:i:s');
@@ -72,109 +73,115 @@ class OrdersController extends Controller
         //$data_row = $this->pairing_lev($request->input('order_id'), $request->input('ref_id'), 5, $request->input('pass'));
         //$data_row = $this->get_level_num($request->input('customer_id'),$request->input('deep'));
         //$data_row = $this->get_ref_exc($request->input('customer_id'), $dwn_arr, 1, 0, $request->input('deep'));
-        return $data_row;
+        //return $data_row;
+        $ref1_id = $request->input('ref_id');
+        $reg_today = $request->input('date');
+        $daily_amount_paired = Pairing::where('ref1_id', '=', $ref1_id)
+            ->whereDate('register', '=', $reg_today)
+            ->sum('ref1_amount');
+        return $daily_amount_paired;
         /*
-        if ($request->ajax()) {
-            
-            $query = Order::with('products')
-            ->with('customers')
-            ->with('accounts')
-            ->FilterInput()
-            ->FilterCustomer()
-            ->orderBy("register", "desc")
-            ->get();
+    if ($request->ajax()) {
 
-            $table = Datatables::of($query);
+    $query = Order::with('products')
+    ->with('customers')
+    ->with('accounts')
+    ->FilterInput()
+    ->FilterCustomer()
+    ->orderBy("register", "desc")
+    ->get();
 
-            $table->addColumn('placeholder', '&nbsp;');
-            $table->addColumn('actions', '&nbsp;');
+    $table = Datatables::of($query);
 
-            $table->editColumn('actions', function ($row) {
-                $viewGate = 'order_show';
-                $editGate = 'order_edit';
-                $deleteGate = 'order_delete';
-                $crudRoutePart = 'orders';
+    $table->addColumn('placeholder', '&nbsp;');
+    $table->addColumn('actions', '&nbsp;');
 
-                return view('partials.datatablesOrders', compact(
-                    'viewGate',
-                    'editGate',
-                    'deleteGate',
-                    'crudRoutePart',
-                    'row'
-                ));
-            });
+    $table->editColumn('actions', function ($row) {
+    $viewGate = 'order_show';
+    $editGate = 'order_edit';
+    $deleteGate = 'order_delete';
+    $crudRoutePart = 'orders';
 
-            $table->editColumn('register', function ($row) {
-                return $row->register ? $row->register : "";
-            });
+    return view('partials.datatablesOrders', compact(
+    'viewGate',
+    'editGate',
+    'deleteGate',
+    'crudRoutePart',
+    'row'
+    ));
+    });
 
-            $table->editColumn('code', function ($row) {
-                return $row->code ? $row->code : "";
-            });
+    $table->editColumn('register', function ($row) {
+    return $row->register ? $row->register : "";
+    });
 
-            $table->editColumn('name', function ($row) {
-                if(isset($row->customers->code)){
-                    return $row->customers->code ? $row->customers->code." - ".$row->customers->name  : "";
-                }else{
-                    return '';
-                }
-            });
+    $table->editColumn('code', function ($row) {
+    return $row->code ? $row->code : "";
+    });
 
-            $table->editColumn('memo', function ($row) {
-                return $row->memo ? $row->memo : "";
-            });
+    $table->editColumn('name', function ($row) {
+    if(isset($row->customers->code)){
+    return $row->customers->code ? $row->customers->code." - ".$row->customers->name  : "";
+    }else{
+    return '';
+    }
+    });
 
-            $table->editColumn('status', function ($row) {
-                return $row->status ? $row->status : "";
-            });
+    $table->editColumn('memo', function ($row) {
+    return $row->memo ? $row->memo : "";
+    });
 
-            $table->editColumn('status_delivery', function ($row) {
-                return $row->status_delivery ? $row->status_delivery : "";
-            });
+    $table->editColumn('status', function ($row) {
+    return $row->status ? $row->status : "";
+    });
 
-            $table->editColumn('amount', function ($row) {
-                return $row->total ? number_format($row->total, 2) : "";
-            });
+    $table->editColumn('status_delivery', function ($row) {
+    return $row->status_delivery ? $row->status_delivery : "";
+    });
 
-            $table->editColumn('accpay', function ($row) {
-                if(isset($row->accounts->code)){
-                    return $row->accounts->name ? $row->accounts->name  : "";
-                }else{
-                    return '';
-                }
-            });
+    $table->editColumn('amount', function ($row) {
+    return $row->total ? number_format($row->total, 2) : "";
+    });
 
-            $table->editColumn('product', function ($row) {
-                $product_list ='<ul>';
-                foreach($row->products as $key => $item){
-                $product_list .='<li>'.$item->name." (".$item->pivot->quantity." x ".number_format($item->price,2).")".'</li>';
-                }
-                $product_list .='</ul>';
-                return $product_list;
-            });
+    $table->editColumn('accpay', function ($row) {
+    if(isset($row->accounts->code)){
+    return $row->accounts->name ? $row->accounts->name  : "";
+    }else{
+    return '';
+    }
+    });
 
-            $table->rawColumns(['actions', 'placeholder','product']);
+    $table->editColumn('product', function ($row) {
+    $product_list ='<ul>';
+    foreach($row->products as $key => $item){
+    $product_list .='<li>'.$item->name." (".$item->pivot->quantity." x ".number_format($item->price,2).")".'</li>';
+    }
+    $product_list .='</ul>';
+    return $product_list;
+    });
 
-            $table->addIndexColumn();
-            return $table->make(true);
-        }
-        //def view
-        $orders = Order::with('products')
-        ->with('customers')
-        ->with('accounts')
-        ->get();
+    $table->rawColumns(['actions', 'placeholder','product']);
 
-        $customers = Customer::select('*')
-            ->where(function ($query) {
-                $query->where('type', 'member')
-                    ->orWhere('type', 'agent')
-                    ->orWhere('def', '1');
-            })
-            ->get();
-        
-        //return $orders;
-        return view('admin.orders.index', compact('orders','customers'));
-        */
+    $table->addIndexColumn();
+    return $table->make(true);
+    }
+    //def view
+    $orders = Order::with('products')
+    ->with('customers')
+    ->with('accounts')
+    ->get();
+
+    $customers = Customer::select('*')
+    ->where(function ($query) {
+    $query->where('type', 'member')
+    ->orWhere('type', 'agent')
+    ->orWhere('def', '1');
+    })
+    ->get();
+
+    //return $orders;
+    return view('admin.orders.index', compact('orders','customers'));
+     */
     }
 
     public function create()

@@ -562,6 +562,7 @@ class OrdersApiController extends Controller
     {
         //get total
         $total = 0;
+        $discount = 0;
         $cogs_total = 0;
         $bv_total = 0;
         $profit = 0;
@@ -571,6 +572,7 @@ class OrdersApiController extends Controller
         $count_cart = count($cart_arr);
         for ($i = 0; $i < $count_cart; $i++) {
             $total += $cart_arr[$i]->quantity * $cart_arr[$i]->price;
+            $discount += $cart_arr[$i]->quantity * (($cart_arr[$i]->discount/100)*$cart_arr[$i]->price);
             $product = Product::find($cart_arr[$i]->products_id);
             $cogs_total += $cart_arr[$i]->quantity * $product->cogs;
             $bv_total += $cart_arr[$i]->quantity * $product->bv;
@@ -642,10 +644,11 @@ class OrdersApiController extends Controller
             if ($package_type == 1) {
                 //conventional fee
                 //CONV
-                $conv_row = NetworkFee::select('*')
-                    ->Where('type', '=', 'conventional')
-                    ->get();
-                $ref_fee_lev = (($conv_row[0]->sbv) / 100) * $bv_nett;
+                // $conv_row = NetworkFee::select('*')
+                //     ->Where('type', '=', 'conventional')
+                //     ->get();
+                // $ref_fee_lev = (($conv_row[0]->sbv) / 100) * $bv_nett;
+                $ref_fee_lev = $discount;
             } else {
                 //get LEV RO
                 $lev_fee = $sbv / $ref_fee_row[0]->deep_level;

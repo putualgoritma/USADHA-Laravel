@@ -26,6 +26,7 @@ class Product extends Model
         'description',
         'img',
         'bv',
+        'discount',
     ];
 
     public function accounts()

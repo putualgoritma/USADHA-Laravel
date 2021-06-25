@@ -30,6 +30,7 @@ class Package extends Model
         'package_type',
         'bv',
         'activation_type_id',
+        'discount',
     ];
 
     public function products()
