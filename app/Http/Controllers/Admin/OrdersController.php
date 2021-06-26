@@ -74,12 +74,13 @@ class OrdersController extends Controller
         //$data_row = $this->get_level_num($request->input('customer_id'),$request->input('deep'));
         //$data_row = $this->get_ref_exc($request->input('customer_id'), $dwn_arr, 1, 0, $request->input('deep'));
         //return $data_row;
-        $ref1_id = $request->input('ref_id');
-        $reg_today = $request->input('date');
-        $daily_amount_paired = Pairing::where('ref1_id', '=', $ref1_id)
-            ->whereDate('register', '=', $reg_today)
-            ->sum('ref1_amount');
-        return $daily_amount_paired;
+        // $ref1_id = $request->input('ref_id');
+        // $reg_today = $request->input('date');
+        // $daily_amount_paired = Pairing::where('ref1_id', '=', $ref1_id)
+        //     ->whereDate('register', '=', $reg_today)
+        //     ->sum('ref1_amount');
+        $this->auto_activation_type();
+        //return $daily_amount_paired;
         /*
     if ($request->ajax()) {
 

@@ -14,6 +14,7 @@ class OrderPoint extends Model
 
     protected $fillable = [
         'amount',
+        'orders_id',
     ];
 
     public function customers()

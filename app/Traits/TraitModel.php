@@ -10,6 +10,7 @@ use App\Capital;
 use App\Customer;
 use App\NetworkFee;
 use App\Order;
+use App\OrderPoint;
 use App\Pairing;
 use App\Payreceivable;
 use App\PayreceivableTrs;
@@ -18,64 +19,73 @@ use Illuminate\Database\QueryException;
 
 trait TraitModel
 {
-    public function auto_activation_type($ref_id, $parent_id)
+    public function auto_activation_type()
     {
         //list member active
         $members_list = Customer::select('id', 'code', 'created_at')
             ->where('status', '=', 'active')
+            ->where('type', '=', 'member')
             ->orderBy('created_at', 'asc')
             ->get();
         foreach ($members_list as $key => $member) {
+
             //find order point & get amount with keyword 'Pemotongan Poin dari Aktivasi Member MBR00009%'
-            $member_activation_row = Customer::select('amount', 'orders_id')
-                ->where('memo', 'LIKE', 'Pemotongan Poin dari Aktivasi Member ' . $member->id . '%')
+            $member_activation_row = OrderPoint::select('amount', 'orders_id')
+                ->where('memo', 'LIKE', 'Pemotongan Poin dari Aktivasi Member ' . $member->code . '%')
                 ->first();
-            $member_activation_amount = $member_activation_row->amount;
-            //BVPO
-            $bvpo_row = NetworkFee::select('*')
-                ->Where('code', '=', 'BVPO')
-                ->get();
-            //get activation bv max
-            $package_activation_user = Activation::select('type', 'bv_min', 'bv_max')
-                ->Where('id', '=', '1')
-                ->get();
-            $package_activation_silver = Activation::select('type', 'bv_min', 'bv_max')
-                ->Where('id', '=', '2')
-                ->get();
-            $package_activation_gold = Activation::select('type', 'bv_min', 'bv_max')
-                ->Where('id', '=', '3')
-                ->get();
-            $package_activation_platinum = Activation::select('type', 'bv_min', 'bv_max')
-                ->Where('id', '=', '4')
-                ->get();
-            //conditional amount if... range set activation_type_id
-            if ($member_activation_amount > 0 && $member_activation_amount < 1000000) {
-                $activation_type_id = 1;
-                $bv_activation_amount = $package_activation_user[0]->bv_max * $bvpo_row[0]->amount;
-            } else if ($member_activation_amount >= 1000000 && $member_activation_amount < 2000000) {
-                $activation_type_id = 2;
-                $bv_activation_amount = $package_activation_silver[0]->bv_max * $bvpo_row[0]->amount;
-            } else if ($member_activation_amount >= 2000000 && $member_activation_amount < 5000000) {
-                $activation_type_id = 3;
-                $bv_activation_amount = $package_activation_gold[0]->bv_max * $bvpo_row[0]->amount;
-            } else if ($member_activation_amount >= 5000000) {
-                $activation_type_id = 4;
-                $bv_activation_amount = $package_activation_platinum[0]->bv_max * $bvpo_row[0]->amount;
+            //var_dump($member_activation_row);
+            if (!empty($member_activation_row)) {                
+                $member_activation_amount = $member_activation_row->amount;
+                //BVPO
+                $bvpo_row = NetworkFee::select('*')
+                    ->Where('code', '=', 'BVPO')
+                    ->get();
+                //get activation bv max
+                $package_activation_user = Activation::select('type', 'bv_min', 'bv_max')
+                    ->Where('id', '=', '1')
+                    ->get();
+                $package_activation_silver = Activation::select('type', 'bv_min', 'bv_max')
+                    ->Where('id', '=', '2')
+                    ->get();
+                $package_activation_gold = Activation::select('type', 'bv_min', 'bv_max')
+                    ->Where('id', '=', '3')
+                    ->get();
+                $package_activation_platinum = Activation::select('type', 'bv_min', 'bv_max')
+                    ->Where('id', '=', '4')
+                    ->get();
+                //conditional amount if... range set activation_type_id
+                if ($member_activation_amount > 0 && $member_activation_amount < 341000) {
+                    $activation_type_id = 1;
+                    $bv_activation_amount = $package_activation_user[0]->bv_max * $bvpo_row[0]->amount;
+                } else if ($member_activation_amount >= 341000 && $member_activation_amount < 651000) {
+                    $activation_type_id = 2;
+                    $bv_activation_amount = $package_activation_silver[0]->bv_max * $bvpo_row[0]->amount;
+                } else if ($member_activation_amount >= 651000 && $member_activation_amount < 921000) {
+                    $activation_type_id = 3;
+                    $bv_activation_amount = $package_activation_gold[0]->bv_max * $bvpo_row[0]->amount;
+                } else if ($member_activation_amount >= 921000) {
+                    $activation_type_id = 4;
+                    $bv_activation_amount = $package_activation_platinum[0]->bv_max * $bvpo_row[0]->amount;
+                } else {
+                    $activation_type_id = 1;
+                    $bv_activation_amount = $package_activation_user[0]->bv_max * $bvpo_row[0]->amount;
+                }                
+                //update member
+                $member = Customer::find($member->id);
+                //set activation_at = created_at
+                $activation_at = $member->created_at;
+                $member->activation_type_id = $activation_type_id;
+                $member->activation_at = $activation_at;
+                $member->save();
+                //update order
+                $order = Order::find($member_activation_row->orders_id);
+                $order->bv_activation_amount = $bv_activation_amount;
+                $order->customers_activation_id = $activation_type_id;
+                $order->save();
+                echo $member->id . " - " . $member->code . " - " . $member_activation_amount." - ".$member->activation_type_id . " - " . $member->activation_at . " || " . $order->id . " - " . $order->bv_activation_amount . " - " . $order->customers_activation_id . "<br>";
             } else {
-                $activation_type_id = 1;
-                $bv_activation_amount = $package_activation_user[0]->bv_max * $bvpo_row[0]->amount;
+                echo $member->id . " - " . $member->code . " - no activasi" . "<br>";
             }
-            //set activation_at = created_at
-            $activation_at = $member->created_at;
-            //update member
-            $member = Customer::find($member);
-            $member->activation_type_id = $activation_type_id;
-            $member->activation_at = $activation_at;
-            $member->save();
-            //update order
-            $order = Order::find($member_activation_row->orders_id);
-            $order->bv_activation_amount = $bv_activation_amount;
-            $order->customers_activation_id = $activation_type_id;
         }
     }
 
@@ -88,14 +98,15 @@ trait TraitModel
             ->orderBy('created_at', 'asc')
             ->get();
         foreach ($downref_list as $key => $downref) {
+            //echo $ref_id."-".$downref."<br>";
             //update parent_id to -> $parent_id
-            $member = Customer::find($downref);
+            $member = Customer::find($downref->id);
             $member->parent_id = $parent_id;
             $member->save();
             //set next parent_id
-            $parent_id = $downref;
+            $parent_id = $downref->id;
             //recursive
-            $this->auto_parent($downref, $downref);
+            $this->auto_parent($downref->id, $parent_id);
         }
     }
 
