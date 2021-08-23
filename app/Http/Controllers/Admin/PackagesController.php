@@ -21,6 +21,7 @@ class PackagesController extends Controller
 
         //$packages = Package::with('products')->get();
         $packages = Package::where('type', 'package')
+        ->where('status', 'show')
         ->with('products')
         ->get();
 
@@ -32,7 +33,7 @@ class PackagesController extends Controller
         abort_if(Gate::denies('package_create'), Response::HTTP_FORBIDDEN, '403 Forbidden');
 
         //$products = Product::all();
-        $products = Product::where('type', 'single')->get();
+        $products = Product::where('type', 'single')->where('status', 'show')->get();
         $activations = Activation::all();
 
         return view('admin.packages.create', compact('products','activations'));
@@ -69,7 +70,7 @@ class PackagesController extends Controller
         abort_if(Gate::denies('package_edit'), Response::HTTP_FORBIDDEN, '403 Forbidden');
 
         //$products = Product::all();
-        $products = Product::where('type', 'single')->get();
+        $products = Product::where('type', 'single')->where('status', 'show')->get();
         $activations = Activation::all();
 
         $package->load('products');
@@ -93,6 +94,7 @@ class PackagesController extends Controller
         $data=array_merge($request->all(), ['type' => 'package','cogs' => $cogs_total,'bv' => $bv]);
         
         $img_path="/images/products";
+        $basepath=str_replace("laravel-admin","public_html/admin",\base_path());
         if ($request->file('img') != null) {
             $resource = $request->file('img');
             //$img_name = $resource->getClientOriginalName();
@@ -102,7 +104,7 @@ class PackagesController extends Controller
             try {
                 //unlink old
                 $data = array_merge($request->all(), ['img' => $img_name]);
-                $resource->move(\base_path() . $img_path, $img_name);
+                $resource->move($basepath . $img_path, $img_name);
             } catch (QueryException $exception) {
                 return back()->withError('File is too large!')->withInput();
             }

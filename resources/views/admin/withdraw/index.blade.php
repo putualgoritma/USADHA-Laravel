@@ -38,7 +38,10 @@
                             {{ trans('global.withdraw.fields.points') }}
                         </th>
                         <th>
-                            Tipe Pembayaran
+                            {{ trans('global.withdraw.fields.bank_name') }}
+                        </th>
+                        <th>
+                            {{ trans('global.withdraw.fields.bank_acc_no') }}
                         </th>
                         <th>
                             &nbsp;
@@ -72,6 +75,9 @@
                             </td>
                             <td>
                                 {{ $withdraw->accounts->name ?? '' }}
+                            </td>
+                            <td>
+                                {{ $withdraw->bank_acc_no ?? '' }}
                             </td>
                             <td>
                                 @can('withdraw_show')

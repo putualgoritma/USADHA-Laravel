@@ -13,6 +13,7 @@ class PackagesApiController extends Controller
     {
         $packages = Package::where('type', 'package')
         ->with('products')
+        ->where('status', '=', 'show')
         ->get();
 
         return $packages;
@@ -22,6 +23,7 @@ class PackagesApiController extends Controller
     {
         $packages = Package::where('type', 'package')
         ->where('package_type', $type)
+        ->where('status', '=', 'show')
         ->with('products')
         ->get();
 

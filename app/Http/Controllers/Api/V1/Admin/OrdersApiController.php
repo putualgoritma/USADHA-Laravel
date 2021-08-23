@@ -571,11 +571,11 @@ class OrdersApiController extends Controller
         $cart_arr = $package->cart;
         $count_cart = count($cart_arr);
         for ($i = 0; $i < $count_cart; $i++) {
-            $total += $cart_arr[$i]->quantity * $cart_arr[$i]->price;
-            $discount += $cart_arr[$i]->quantity * (($cart_arr[$i]->discount/100)*$cart_arr[$i]->price);
+            $total += $cart_arr[$i]->quantity * $cart_arr[$i]->price;            
             $product = Product::find($cart_arr[$i]->products_id);
             $cogs_total += $cart_arr[$i]->quantity * $product->cogs;
             $bv_total += $cart_arr[$i]->quantity * $product->bv;
+            $discount += $cart_arr[$i]->quantity * (($product->discount/100)*$cart_arr[$i]->price);
         }
         $profit = $total - $cogs_total;
 
@@ -653,7 +653,7 @@ class OrdersApiController extends Controller
                 //get LEV RO
                 $lev_fee = $sbv / $ref_fee_row[0]->deep_level;
                 $ref_arr = array();
-                $ref_arr = $this->get_ref_exc($member->id, $ref_arr, 1, $member->ref_id, $ref_fee_row[0]->deep_level);
+                $ref_arr = $this->get_ref_exc($member->id, $ref_arr, 1, 0, $ref_fee_row[0]->deep_level);
                 $ref_fee_lev = count($ref_arr) * $lev_fee;
             }
 

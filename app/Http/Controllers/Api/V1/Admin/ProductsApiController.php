@@ -11,8 +11,9 @@ class ProductsApiController extends Controller
 {
     public function stockMember($id)
     {
-        $products = Product::selectRaw("products.*,(SUM(CASE WHEN product_order_details.type = 'D' AND product_order_details.status = 'onhand' AND product_order_details.owner = '".$id."' THEN product_order_details.quantity ELSE 0 END) - SUM(CASE WHEN product_order_details.type = 'C' AND product_order_details.status = 'onhand' AND product_order_details.owner = '".$id."' THEN product_order_details.quantity ELSE 0 END)) AS quantity_balance")
+        $products = Product::selectRaw("products.*,(SUM(CASE WHEN product_order_details.type = 'D' AND product_order_details.status = 'onhand' AND product_order_details.owner = '" . $id . "' THEN product_order_details.quantity ELSE 0 END) - SUM(CASE WHEN product_order_details.type = 'C' AND product_order_details.status = 'onhand' AND product_order_details.owner = '" . $id . "' THEN product_order_details.quantity ELSE 0 END)) AS quantity_balance")
             ->leftjoin('product_order_details', 'product_order_details.products_id', '=', 'products.id')
+            ->where('products.status', '=', 'show')
             ->groupBy('products.id')
             ->get();
 
@@ -34,27 +35,47 @@ class ProductsApiController extends Controller
             ]);
         }
     }
-    
-    
+
     public function indexAgent()
     {
-        $products = Product::where('package_type', '!=', 'member')
-        ->get();
+        $products = Product::where(function ($qry) {
+            $qry->where('package_type', '=', 'agent')
+                ->orWhere('package_type', '=', 'none');
+        })
+            ->where('status', '=', 'show')
+            ->get();
 
         return $products;
     }
 
     public function indexMember()
     {
-        $products = Product::where('package_type', '!=', 'agent')
-        ->get();
+        $products = Product::where(function ($qry) {
+            $qry->where('package_type', '!=', 'agent')
+                ->orWhere('package_type', '=', 'none');
+        })
+            ->where('status', '=', 'show')
+            ->get();
+
+        return $products;
+    }
+
+    public function indexMemberUpgrade($activation_type_id)
+    {
+        $products = Product::where(function ($qry) {
+            $qry->where('package_type', '=', 'upgrade');
+        })
+            ->where('status', '=', 'show')
+            ->where('activation_type_id', '=', $activation_type_id)
+            ->get();
 
         return $products;
     }
 
     public function index()
     {
-        $products = Product::all();
+        $products = Product::where('status', '=', 'show')
+            ->get();
 
         return $products;
     }

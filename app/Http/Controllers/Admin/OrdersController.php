@@ -8,7 +8,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\UpdateOrderRequest;
 use App\Ledger;
-use App\LogNotif;
 use App\NetworkFee;
 use App\Order;
 use App\Package;
@@ -17,8 +16,8 @@ use App\Traits\TraitModel;
 use Berkayk\OneSignal\OneSignalClient;
 use Gate;
 use Illuminate\Http\Request;
-use App\Pairing;
 use Symfony\Component\HttpFoundation\Response;
+use Yajra\DataTables\Facades\DataTables;
 
 class OrdersController extends Controller
 {
@@ -30,159 +29,158 @@ class OrdersController extends Controller
         $this->onesignal_client = new OneSignalClient(env('ONESIGNAL_APP_ID_MEMBER'), env('ONESIGNAL_REST_API_KEY_MEMBER'), '');
     }
 
-    public function test($id)
+    public function smsApi(Request $request)
+    {
+        date_default_timezone_set("Asia/Singapore");
+        $date = date("Y-m-d H:i:s");
+        $number = "+62" . ltrim($request->number, '0');
+        $message = '#plg OTP : ' . $request->otp;
+        $md5_str = "1f4a449a85" . $date . $number . $message;
+        $md5 = md5($md5_str);
+        $data = array(
+            'outbox' => '',
+            'date' => $date,
+            'number' => $number,
+            'message' => $message,
+            'md5' => $md5,
+        );
+
+        $url = 'https://tab-jdol.com/gs-gateway-sms-v3/api.php';
+
+        //open connection
+        $ch = curl_init();
+
+        //set the url, number of POST vars, POST data
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_POST, count($data));
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+
+        //execute post
+        $result = curl_exec($ch);
+
+        //close connection
+        curl_close($ch);
+    }
+
+    public function test(Request $request)
     {
         abort_if(Gate::denies('order_access'), Response::HTTP_FORBIDDEN, '403 Forbidden');
-
-        $user = Customer::find($id);
-        $id_onesignal = $user->id_onesignal;
-        $memo = 'Hallo ' . $user->name . ', Notification Test.';
-        $register = date("Y-m-d");
-        //store to logs_notif
-        $data = ['register' => $register, 'customers_id' => $id, 'memo' => $memo];
-        $logs = LogNotif::create($data);
-        //push notif
-        $this->onesignal_client->sendNotificationToUser(
-            $memo,
-            $id_onesignal,
-            $url = null,
-            $data = null,
-            $buttons = null,
-            $schedule = null
-        );
-        return 'Test success';
+        //$data_row = $this->downref_list($request->input('ref_id'),$request->input('deep'));
+        $dwn_arr = array();
+        // $data_row = $this->ref1_omzet($request->input('ref_id'), 10);
+        // $data_row = $this->group_omzet($request->input('ref_id'), 5);        
+        // $data_row = $this->pairing(1819, 1050);        
+        // return $this->downref_omzet_view($request->input('ref_id'), $request->input('activation_at'), 1);
+        //$data_row = $this->recursive_test(5);
+        // $data_row = $this->ref_up_list($request->input('ref_id'), $dwn_arr);
+        return $this->pairing(1820, 1050);
+        // return $data_row;
     }
 
     public function index(Request $request)
     {
         abort_if(Gate::denies('order_access'), Response::HTTP_FORBIDDEN, '403 Forbidden');
 
-        $dwn_arr = array();
-        //$data_row = $this->set_parent($request->input('ref_id'));
-        //$data_row = $this->upparent_list($request->input('parent_id'), $dwn_arr);
-        //$data_row = $this->upline_list($request->input('ref_id'), $dwn_arr, 1, 0);
-        //$data_row = $this->downline_list($request->input('parent_id'), $dwn_arr, 1, 0);
-        //$data_row = $this->pairing_ref1($request->input('ref_id'),$request->input('pass'));
-        //$data_row = $this->pairing_group($request->input('parent_id'), $request->input('deep'));
-        //$data_row = $this->pairing_ref1_balance($request->input('ref_id'), $request->input('deep'));
-        //$data_row = $this->pairing_down(0, $request->input('ref_id'), true);
-        //$data_row = $this->pairing_up(0, $request->input('ref_id'), true);
-        //$data_row = date('Y-m-d H:i:s');
-        //$data_row = $this->downref_list($request->input('ref_id'));
-        //$data_row = $this->pairing($request->input('order_id'), $request->input('ref_id'));
-        //$data_row = $this->pairing_lev($request->input('order_id'), $request->input('ref_id'), 5, $request->input('pass'));
-        //$data_row = $this->get_level_num($request->input('customer_id'),$request->input('deep'));
-        //$data_row = $this->get_ref_exc($request->input('customer_id'), $dwn_arr, 1, 0, $request->input('deep'));
-        //return $data_row;
-        // $ref1_id = $request->input('ref_id');
-        // $reg_today = $request->input('date');
-        // $daily_amount_paired = Pairing::where('ref1_id', '=', $ref1_id)
-        //     ->whereDate('register', '=', $reg_today)
-        //     ->sum('ref1_amount');
-        $this->auto_activation_type();
-        //return $daily_amount_paired;
-        /*
-    if ($request->ajax()) {
+        if ($request->ajax()) {
 
-    $query = Order::with('products')
-    ->with('customers')
-    ->with('accounts')
-    ->FilterInput()
-    ->FilterCustomer()
-    ->orderBy("register", "desc")
-    ->get();
+            $query = Order::with('products')
+                ->with('customers')
+                ->with('accounts')
+                ->FilterInput()
+                ->FilterCustomer()
+                ->orderBy("register", "desc")
+                ->get();
 
-    $table = Datatables::of($query);
+            $table = Datatables::of($query);
 
-    $table->addColumn('placeholder', '&nbsp;');
-    $table->addColumn('actions', '&nbsp;');
+            $table->addColumn('placeholder', '&nbsp;');
+            $table->addColumn('actions', '&nbsp;');
 
-    $table->editColumn('actions', function ($row) {
-    $viewGate = 'order_show';
-    $editGate = 'order_edit';
-    $deleteGate = 'order_delete';
-    $crudRoutePart = 'orders';
+            $table->editColumn('actions', function ($row) {
+                $viewGate = 'order_show';
+                $editGate = 'order_edit';
+                $deleteGate = 'order_delete';
+                $crudRoutePart = 'orders';
 
-    return view('partials.datatablesOrders', compact(
-    'viewGate',
-    'editGate',
-    'deleteGate',
-    'crudRoutePart',
-    'row'
-    ));
-    });
+                return view('partials.datatablesOrders', compact(
+                    'viewGate',
+                    'editGate',
+                    'deleteGate',
+                    'crudRoutePart',
+                    'row'
+                ));
+            });
 
-    $table->editColumn('register', function ($row) {
-    return $row->register ? $row->register : "";
-    });
+            $table->editColumn('register', function ($row) {
+                return $row->register ? $row->register : "";
+            });
 
-    $table->editColumn('code', function ($row) {
-    return $row->code ? $row->code : "";
-    });
+            $table->editColumn('code', function ($row) {
+                return $row->code ? $row->code : "";
+            });
 
-    $table->editColumn('name', function ($row) {
-    if(isset($row->customers->code)){
-    return $row->customers->code ? $row->customers->code." - ".$row->customers->name  : "";
-    }else{
-    return '';
-    }
-    });
+            $table->editColumn('name', function ($row) {
+                if (isset($row->customers->code)) {
+                    return $row->customers->code ? $row->customers->code . " - " . $row->customers->name : "";
+                } else {
+                    return '';
+                }
+            });
 
-    $table->editColumn('memo', function ($row) {
-    return $row->memo ? $row->memo : "";
-    });
+            $table->editColumn('memo', function ($row) {
+                return $row->memo ? $row->memo : "";
+            });
 
-    $table->editColumn('status', function ($row) {
-    return $row->status ? $row->status : "";
-    });
+            $table->editColumn('status', function ($row) {
+                return $row->status ? $row->status : "";
+            });
 
-    $table->editColumn('status_delivery', function ($row) {
-    return $row->status_delivery ? $row->status_delivery : "";
-    });
+            $table->editColumn('status_delivery', function ($row) {
+                return $row->status_delivery ? $row->status_delivery : "";
+            });
 
-    $table->editColumn('amount', function ($row) {
-    return $row->total ? number_format($row->total, 2) : "";
-    });
+            $table->editColumn('amount', function ($row) {
+                return $row->total ? number_format($row->total, 2) : "";
+            });
 
-    $table->editColumn('accpay', function ($row) {
-    if(isset($row->accounts->code)){
-    return $row->accounts->name ? $row->accounts->name  : "";
-    }else{
-    return '';
-    }
-    });
+            $table->editColumn('accpay', function ($row) {
+                if (isset($row->accounts->code)) {
+                    return $row->accounts->name ? $row->accounts->name : "";
+                } else {
+                    return '';
+                }
+            });
 
-    $table->editColumn('product', function ($row) {
-    $product_list ='<ul>';
-    foreach($row->products as $key => $item){
-    $product_list .='<li>'.$item->name." (".$item->pivot->quantity." x ".number_format($item->price,2).")".'</li>';
-    }
-    $product_list .='</ul>';
-    return $product_list;
-    });
+            $table->editColumn('product', function ($row) {
+                $product_list = '<ul>';
+                foreach ($row->products as $key => $item) {
+                    $product_list .= '<li>' . $item->name . " (" . $item->pivot->quantity . " x " . number_format($item->price, 2) . ")" . '</li>';
+                }
+                $product_list .= '</ul>';
+                return $product_list;
+            });
 
-    $table->rawColumns(['actions', 'placeholder','product']);
+            $table->rawColumns(['actions', 'placeholder', 'product']);
 
-    $table->addIndexColumn();
-    return $table->make(true);
-    }
-    //def view
-    $orders = Order::with('products')
-    ->with('customers')
-    ->with('accounts')
-    ->get();
+            $table->addIndexColumn();
+            return $table->make(true);
+        }
+        //def view
+        $orders = Order::with('products')
+            ->with('customers')
+            ->with('accounts')
+            ->get();
 
-    $customers = Customer::select('*')
-    ->where(function ($query) {
-    $query->where('type', 'member')
-    ->orWhere('type', 'agent')
-    ->orWhere('def', '1');
-    })
-    ->get();
+        $customers = Customer::select('*')
+            ->where(function ($query) {
+                $query->where('type', 'member')
+                    ->orWhere('type', 'agent')
+                    ->orWhere('def', '1');
+            })
+            ->get();
 
-    //return $orders;
-    return view('admin.orders.index', compact('orders','customers'));
-     */
+        //return $orders;
+        return view('admin.orders.index', compact('orders', 'customers'));
     }
 
     public function create()

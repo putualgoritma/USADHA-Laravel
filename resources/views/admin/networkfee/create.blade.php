@@ -112,7 +112,7 @@
             </div>
             <div class="form-group {{ $errors->has('sbv') ? 'has-error' : '' }}">
                 <label for="sbv">{{ trans('global.networkfee.fields.sbv') }}</label>
-                <input type="number" id="sbv" name="sbv" class="form-control" value="{{ old('sbv', isset($networkfee) ? $networkfee->sbv : '0') }}" step="1.00">
+                <input type="text" id="sbv" name="sbv" class="form-control" value="{{ old('sbv', isset($networkfee) ? $networkfee->sbv : '0') }}">
                 @if($errors->has('sbv'))
                     <em class="invalid-feedback">
                         {{ $errors->first('sbv') }}

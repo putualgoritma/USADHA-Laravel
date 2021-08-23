@@ -34,6 +34,11 @@ class CustomerApi extends Authenticatable
         'status_block',
     ];
 
+    public function activations()
+    {
+        return $this->belongsTo(Activation::class, 'activation_type_id')->select('id', 'name');
+    }
+
     /**
      * The attributes that should be hidden for arrays.
      *

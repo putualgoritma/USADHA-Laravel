@@ -28,8 +28,9 @@ class ProductsController extends Controller
         $def_id =$ref_def_id[0]->id;
 
         $products = Product::selectRaw("products.*,(SUM(CASE WHEN product_order_details.type = 'D' AND product_order_details.status = 'onhand' AND product_order_details.owner = '".$def_id."' THEN product_order_details.quantity ELSE 0 END) - SUM(CASE WHEN product_order_details.type = 'C' AND product_order_details.status = 'onhand' AND product_order_details.owner = '".$def_id."' THEN product_order_details.quantity ELSE 0 END)) AS quantity_balance")
-            ->leftjoin('product_order_details', 'product_order_details.products_id', '=', 'products.id')
             ->where('products.type', 'single')
+            ->where('products.status', 'show')    
+            ->leftjoin('product_order_details', 'product_order_details.products_id', '=', 'products.id')            
             ->groupBy('products.id')
             ->get();
 
@@ -114,6 +115,7 @@ class ProductsController extends Controller
         $data = $request->all();
         
         $img_path="/images/products";
+        $basepath=str_replace("laravel-admin","public_html/admin",\base_path());
         $data = $request->all();
         if ($request->file('img') != null) {
             $resource = $request->file('img');
@@ -124,7 +126,7 @@ class ProductsController extends Controller
             try {
                 //unlink old
                 $data = array_merge($data, ['img' => $img_name]);
-                $resource->move(\base_path() . $img_path, $img_name);
+                $resource->move($basepath . $img_path, $img_name);
             } catch (QueryException $exception) {
                 return back()->withError('File is too large!')->withInput();
             }

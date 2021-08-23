@@ -32,7 +32,6 @@
                 <div class="input-group">
                     <select id="type" name="type" class="form-control">
                     <option value="">== Semua Type ==</option>
-                    <option value="activation_member">Aktivasi Member</option>
                     <option value="sale">Penjualan</option>
                     <option value="sale_retur">Retur Penjualan</option>
                     <option value="topup">Topup</option>
@@ -52,7 +51,7 @@
                 </div>
             </div>
         <div class="table-responsive">
-            <table class=" table table-bordered table-striped table-hover datatable datatable-Order ajaxTable datatable-orders"">
+            <table class=" table table-bordered table-striped table-hover datatable ajaxTable datatable-orders"">
                 <thead>
                     <tr>
                         <th width="10">
@@ -156,7 +155,7 @@
     order: [[ 1, 'desc' ]],
     pageLength: 100,
   });
-  $('.datatable-Order:not(.ajaxTable)').DataTable({ buttons: dtButtons })
+  $('.datatable-orders:not(.ajaxTable)').DataTable({ buttons: dtButtons })
 
   let dtOverrideGlobals = {
     buttons: dtButtons,

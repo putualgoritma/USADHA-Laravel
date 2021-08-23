@@ -91,6 +91,7 @@ class Order extends Model
                 ->orWhere('type', 'buy')
                 ->orWhere('type', 'buy_retur')
                 ->orWhere('type', 'agent_sale')
+                ->orWhere('type', 'activation_member')
                 ->orWhere('type', 'stock_trsf');
             });
         }

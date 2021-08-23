@@ -10,107 +10,61 @@ use App\Capital;
 use App\Customer;
 use App\NetworkFee;
 use App\Order;
-use App\OrderPoint;
 use App\Pairing;
 use App\Payreceivable;
 use App\PayreceivableTrs;
 use App\Production;
+use App\OrderPoint;
 use Illuminate\Database\QueryException;
 
 trait TraitModel
 {
-    public function auto_activation_type()
-    {
-        //list member active
-        $members_list = Customer::select('id', 'code', 'created_at')
-            ->where('status', '=', 'active')
-            ->where('type', '=', 'member')
-            ->orderBy('created_at', 'asc')
-            ->get();
-        foreach ($members_list as $key => $member) {
+    private $fee_pairing_amount = 5;
 
-            //find order point & get amount with keyword 'Pemotongan Poin dari Aktivasi Member MBR00009%'
-            $member_activation_row = OrderPoint::select('amount', 'orders_id')
-                ->where('memo', 'LIKE', 'Pemotongan Poin dari Aktivasi Member ' . $member->code . '%')
-                ->first();
-            //var_dump($member_activation_row);
-            if (!empty($member_activation_row)) {                
-                $member_activation_amount = $member_activation_row->amount;
-                //BVPO
-                $bvpo_row = NetworkFee::select('*')
-                    ->Where('code', '=', 'BVPO')
-                    ->get();
-                //get activation bv max
-                $package_activation_user = Activation::select('type', 'bv_min', 'bv_max')
-                    ->Where('id', '=', '1')
-                    ->get();
-                $package_activation_silver = Activation::select('type', 'bv_min', 'bv_max')
-                    ->Where('id', '=', '2')
-                    ->get();
-                $package_activation_gold = Activation::select('type', 'bv_min', 'bv_max')
-                    ->Where('id', '=', '3')
-                    ->get();
-                $package_activation_platinum = Activation::select('type', 'bv_min', 'bv_max')
-                    ->Where('id', '=', '4')
-                    ->get();
-                //conditional amount if... range set activation_type_id
-                if ($member_activation_amount > 0 && $member_activation_amount < 341000) {
-                    $activation_type_id = 1;
-                    $bv_activation_amount = $package_activation_user[0]->bv_max * $bvpo_row[0]->amount;
-                } else if ($member_activation_amount >= 341000 && $member_activation_amount < 651000) {
-                    $activation_type_id = 2;
-                    $bv_activation_amount = $package_activation_silver[0]->bv_max * $bvpo_row[0]->amount;
-                } else if ($member_activation_amount >= 651000 && $member_activation_amount < 921000) {
-                    $activation_type_id = 3;
-                    $bv_activation_amount = $package_activation_gold[0]->bv_max * $bvpo_row[0]->amount;
-                } else if ($member_activation_amount >= 921000) {
-                    $activation_type_id = 4;
-                    $bv_activation_amount = $package_activation_platinum[0]->bv_max * $bvpo_row[0]->amount;
-                } else {
-                    $activation_type_id = 1;
-                    $bv_activation_amount = $package_activation_user[0]->bv_max * $bvpo_row[0]->amount;
-                }                
-                //update member
-                $member = Customer::find($member->id);
-                //set activation_at = created_at
-                $activation_at = $member->created_at;
-                $member->activation_type_id = $activation_type_id;
-                $member->activation_at = $activation_at;
-                $member->save();
-                //update order
-                $order = Order::find($member_activation_row->orders_id);
-                $order->bv_activation_amount = $bv_activation_amount;
-                $order->customers_activation_id = $activation_type_id;
-                $order->save();
-                echo $member->id . " - " . $member->code . " - " . $member_activation_amount." - ".$member->activation_type_id . " - " . $member->activation_at . " || " . $order->id . " - " . $order->bv_activation_amount . " - " . $order->customers_activation_id . "<br>";
-            } else {
-                echo $member->id . " - " . $member->code . " - no activasi" . "<br>";
-            }
-        }
-    }
-
-    public function auto_parent($ref_id, $parent_id)
+    public function get_fee_pairing_amount($id_order)
     {
-        //list ref downline
-        $downref_list = Customer::select('id')
-            ->where('ref_id', $ref_id)
-            ->where('status', '=', 'active')
-            ->orderBy('created_at', 'asc')
-            ->get();
-        foreach ($downref_list as $key => $downref) {
-            //echo $ref_id."-".$downref."<br>";
-            //update parent_id to -> $parent_id
-            $member = Customer::find($downref->id);
-            $member->parent_id = $parent_id;
-            $member->save();
-            //set next parent_id
-            $parent_id = $downref->id;
-            //recursive
-            $this->auto_parent($downref->id, $parent_id);
-        }
+        $fee_pairing_amount = OrderPoint::where('orders_id', '=', $id_order)
+        ->where('status', '=', 'onhold')    
+        ->sum('amount');
+        return $fee_pairing_amount;
     }
 
     public function pairing($id_order, $ref1_id, $test = 0)
+    {
+        $up_arr = array();
+        $pairing_fee_total = $this->pairing_process($id_order, $ref1_id, $test);
+        $up_list = $this->ref_up_list($ref1_id, $up_arr);
+        foreach ($up_list as $upline) {
+            $pairing_fee_total += $this->pairing_process($id_order, $upline, $test);
+        }
+        return $this->get_fee_pairing_amount($id_order);
+    }
+
+    public function ref_up_list($ref1_id, $up_arr)
+    {
+        $customer = Customer::find($ref1_id);
+        $ref2_id = $customer->ref_id;
+        if ($ref2_id > 0) {
+            $referal = Customer::find($ref2_id);
+            $ref2_status = $referal->status;
+            if ($ref2_status == 'active') {
+                array_push($up_arr, $ref2_id);
+                return $this->ref_up_list($ref2_id, $up_arr);
+            }
+        }
+        return $up_arr;
+    }
+
+    public function recursive_test($var)
+    {
+        $var_add = 5;
+        if ($var > 0) {
+            $var_nxt = $var - 1;
+            return $var_add + $this->recursive_test($var_nxt);
+        }
+    }
+
+    public function pairing_process($id_order, $ref1_id, $test = 0)
     {
         $ref1_row = Customer::find($ref1_id);
         //init
@@ -129,10 +83,11 @@ trait TraitModel
                 foreach ($dwn_arr as $downline) {
                     //get9 pairing_lev
                     //$fee_out .= "-".$id_order."-".$downline->id."-".$deep_level;
-                    $fee_out += $this->pairing_lev($id_order, $downline->id, $deep_level, $test);
+                    $fee_out += (float) $this->pairing_lev($id_order, $downline->id, $deep_level, $test);
                     $deep_level--;
                 }}
         }
+        //echo $fee_out."</br>";
         return $fee_out;
     }
 
@@ -172,7 +127,6 @@ trait TraitModel
                 $ref2_amount = 0;
                 if ($test == 0 && $ref1_row->status == 'active') {
                     $ref1_fee_pairing = (($nf_rf1_pairing_row[0]->sbv) / 100) * $pairing_ref1_balance;
-                    $fee_out += $ref1_fee_pairing;
                     $ref1_amount = $ref1_fee_pairing;
                     //hitung total bv_amount hari ini yang sudah di pairing di tbl pairing {bvarp_paired}
                     $reg_today = date('Y-m-d');
@@ -180,15 +134,17 @@ trait TraitModel
                         ->whereDate('register', '=', $reg_today)
                         ->sum('ref1_amount');
                     if ($daily_amount_paired <= $nf_rf1_pairing_row[0]->fee_day_max) {
-                        $order->points()->attach($points_id, ['amount' => $ref1_fee_pairing, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Poin Komisi (Pairing) dari group ' . $memo, 'customers_id' => $ref1_row->id]);
+                        //$fee_out += $ref1_fee_pairing;
+                        //$order->points()->attach($points_id, ['amount' => $ref1_fee_pairing, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Poin Komisi (Pairing) dari group ' . $memo, 'customers_id' => $ref1_row->id]);
                     } else {
-                        $ref1_amount = 0;
+                        //$ref1_amount = 0;
                     }
                     //set fee to ref2
                     $ref2_id = 0;
                     $ref2_row = Customer::find($ref1_row->ref_id);
                     $ref2_activation_row = Activation::find($ref2_row->activation_type_id);
-                    if (!empty($ref2_row) && $ref2_row->ref_id > 0 && $test == 0 && $ref2_row->status == 'active') {
+                    $ref2_fee_pairing = 0;
+                    if (!empty($ref2_row) && $ref2_row->ref_id > 0 && $test == 0 && $ref2_row->status == 'active' && $ref2_activation_row->type != "user") {
                         //get network fee pairing -> ref1 activation type
                         $nf_rf2_pairing_row = NetworkFee::select('*')
                             ->Where('type', '=', 'pairing')
@@ -196,31 +152,35 @@ trait TraitModel
                             ->get();
                         $ref2_id = $ref2_row->id;
                         $ref2_fee_pairing = (($nf_rf2_pairing_row[0]->sbv) / 100) * $pairing_ref1_balance;
-                        $fee_out += $ref2_fee_pairing;
                         $ref2_amount = $ref2_fee_pairing;
                         //hitung total bv_amount hari ini yang sudah di pairing di tbl pairing {bvarp_paired}
                         $daily_amount_paired2 = Pairing::where('ref2_id', '=', $ref2_id)
                             ->whereDate('register', '=', $reg_today)
                             ->sum('ref2_amount');
                         if ($daily_amount_paired2 <= $nf_rf2_pairing_row[0]->fee_day_max) {
+                            $fee_out += (float) $ref2_fee_pairing;
+                            $this->fee_pairing_amount += (float) $ref2_fee_pairing;
+                            //echo $fee_out."1. </br>";
                             $order->points()->attach($points_id, ['amount' => $ref2_fee_pairing, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Poin Komisi (Pairing) dari group ' . $memo, 'customers_id' => $ref2_row->id]);
                         } else {
-                            $ref2_amount = 0;
+                            //$ref2_amount = 0;
                         }
                     }
                     //set matching
                     //find ref3
                     $ref3_row = Customer::find($ref2_row->ref_id);
                     $ref3_activation_row = Activation::find($ref3_row->activation_type_id);
-                    if (!empty($ref3_row) && $ref3_row->ref_id > 0 && !$test && $ref3_row->status == 'active') {
+                    if (!empty($ref3_row) && $ref3_row->ref_id > 0 && !$test && $ref3_row->status == 'active' && $ref3_activation_row->type != "user") {
                         //get network fee pairing -> ref3 activation type
                         $nf_rf3_pairing_row = NetworkFee::select('*')
                             ->Where('type', '=', 'matching')
                             ->Where('activation_type_id', '=', $ref3_row->activation_type_id)
                             ->get();
-                        $ref3_fee_pairing = (($nf_rf3_pairing_row[0]->amount) / 100) * $ref1_fee_pairing;
+                        $ref3_fee_pairing = (($nf_rf3_pairing_row[0]->amount) / 100) * $ref2_fee_pairing;
                         //set fee to ref3
-                        $fee_out += $ref3_fee_pairing;
+                        $fee_out += (float) $ref3_fee_pairing;
+                        $this->fee_pairing_amount += (float) $ref3_fee_pairing;
+                        //echo $fee_out."2. </br>";
                         $order->points()->attach($points_id, ['amount' => $ref3_fee_pairing, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Poin Komisi (Matching) dari group ' . $memo, 'customers_id' => $ref3_row->id]);
                     }
                     //insert into tbl pairings
@@ -229,7 +189,7 @@ trait TraitModel
                     $logs = Pairing::create($data);
                 }
             }}
-
+        //echo $fee_out."3. </br>";
         return $fee_out;
     }
 
@@ -241,10 +201,10 @@ trait TraitModel
         $bvarp_paired = Pairing::where('ref1_id', '=', $ref1_id)
             ->sum('bv_amount');
         //hitung selisih bv_amount yang sudah di pairing dengan total bv_amount activasi {bvarp_paired_balance}
-        $bvarp = $this->pairing_ref1($ref1_id, $deep_lev);
+        $bvarp = $this->ref1_omzet($ref1_id, $deep_lev);
         $bvarp_paired_balance = $bvarp - $bvarp_paired;
         //hitung selisih bv_amount yang sudah di pairing dengan total bv_amount group {bvarp_g_paired_balance}
-        $bvarp_g = $this->pairing_group($ref1_id, $deep_lev);
+        $bvarp_g = $this->group_omzet($ref1_id, $deep_lev);
         $bvarp_g_paired_balance = $bvarp_g - $bvarp_paired;
         //compare {bvarp_paired_balance} dengan {bvarp_g_paired_balance},
         if ($bvarp_g_paired_balance >= $bvarp_paired_balance) {
@@ -260,12 +220,13 @@ trait TraitModel
         return $bv_pairing;
     }
 
-    public function pairing_ref1($ref1_id, $deep_lev, $inc_ref1 = 0)
+    //omzet
+    public function ref1_omzet($ref1_id, $deep_lev, $inc_ref1 = 0)
     {
         $bv_activation_amount_total = 0;
         $ref1_row = Customer::find($ref1_id);
         $activation_row = Activation::find($ref1_row->activation_type_id);
-        if ($inc_ref1 == 1 && $activation_row->type != "user") {
+        if ($inc_ref1 == 1) {
             //get ref1 bv activation
             $balance = Order::where('customers_activation_id', '=', $ref1_id)
                 ->where('type', '=', 'activation_member')
@@ -278,20 +239,21 @@ trait TraitModel
         foreach ($downref_list as $downline) {
             $downline_row = Customer::find($downline->id);
             $downline_activation_row = Activation::find($downline_row->activation_type_id);
-            if ($downline_activation_row->type != "user") {
-                //get bv_activation_amount
-                $balance = Order::where('customers_activation_id', '=', $downline->id)
-                    ->where('type', '=', 'activation_member')
-                    ->where('status', '!=', 'closed')
-                    ->where('created_at', '>=', $ref1_row->activation_at)
-                    ->sum('bv_activation_amount');
-                $bv_activation_amount_total += $balance;
-            }
+            //get bv_activation_amount
+            $balance = Order::where('customers_activation_id', '=', $downline->id)
+                ->where('type', '=', 'activation_member')
+                ->where('status', '!=', 'closed')
+                ->where('created_at', '>=', $ref1_row->activation_at)
+                ->sum('bv_activation_amount');
+            $downref_omzet = $this->downref_omzet($downline->id, $ref1_row->activation_at, 1);
+            // echo "</br>". $downline_row->code . "-" . $downline_row->name . "-" . $balance . "-" . $downref_omzet;
+            $bv_activation_amount_total += $balance + $downref_omzet;
         }
         return $bv_activation_amount_total;
     }
 
-    public function pairing_group($parent_id, $deep_lev)
+    //omzet group
+    public function group_omzet($parent_id, $deep_lev)
     {
         $bv_activation_amount_total = 0;
         $dwn_arr = array();
@@ -300,11 +262,66 @@ trait TraitModel
         $dwn_arr = $this->downline_list($ref_id, $parent_id, $dwn_arr, 1, 0, $deep_lev);
         foreach ($dwn_arr as $downline) {
             //get bv_activation_amount
-            $balance = $this->pairing_ref1($downline, $deep_lev);
+            $balance = $this->ref1_omzet($downline, $deep_lev);
             $bv_activation_amount_total += $balance;
         }
         return $bv_activation_amount_total;
 
+    }
+
+    public function downref_omzet($ref_id, $activation_at, $lev)
+    {
+        $bv_activation_amount_total = 0;
+        $downref_list = Customer::select('id', 'code', 'name', 'activation_type_id', 'activation_at')
+            ->where('ref_id', $ref_id)
+            ->where('status', '=', 'active')
+            ->orderBy('activation_at', 'asc')
+            ->with('activations')
+            ->get();
+        foreach ($downref_list as $downline) {
+            $balance = Order::where('customers_activation_id', '=', $downline->id)
+                ->where('type', '=', 'activation_member')
+                ->where('status', '!=', 'closed')
+                ->where('created_at', '>=', $activation_at)
+                ->sum('bv_activation_amount');
+            $bv_activation_amount_total += $balance;
+            $lev_nxt = $lev + 1;
+            $bv_activation_amount_total += $this->downref_omzet($downline->id, $activation_at, $lev_nxt);
+        }
+        return $bv_activation_amount_total;
+    }
+
+    public function downref_omzet_view($ref_id, $activation_at, $lev)
+    {
+        $bv_activation_amount_total = 0;
+        $downref_list = Customer::select('id', 'code', 'name', 'activation_type_id', 'activation_at')
+            ->where('ref_id', $ref_id)
+            ->where('status', '=', 'active')
+            ->orderBy('activation_at', 'asc')
+            ->with('activations')
+            ->get();
+        foreach ($downref_list as $downline) {
+            $balance = Order::where('customers_activation_id', '=', $downline->id)
+                ->where('type', '=', 'activation_member')
+                ->where('status', '!=', 'closed')
+                ->where('created_at', '>=', $activation_at)
+                ->sum('bv_activation_amount');
+            $bv_activation_amount_total += $balance;
+            echo "</br>" . $this->space_generate($lev) . $downline->code . "-" . $downline->name . "-" . $downline->activations->name . "-" . $balance . "-" . $downline->activation_at;
+            $lev_nxt = $lev + 1;
+            $bv_activation_amount_total += $this->downref_omzet_view($downline->id, $activation_at, $lev_nxt);
+        }
+        return $bv_activation_amount_total;
+    }
+
+    public function space_generate($lev)
+    {
+        $space_str = "";
+        for ($i = 0; $i < $lev; $i++) {
+
+            $space_str .= '-';
+        }
+        return $space_str;
     }
 
     //semua downline yang di refrensikan langsung olehnya

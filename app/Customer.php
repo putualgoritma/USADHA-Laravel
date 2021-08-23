@@ -38,6 +38,11 @@ class Customer extends Model
         'activation_at',
     ];
 
+    public function activations()
+    {
+        return $this->belongsTo(Activation::class, 'activation_type_id')->select('id', 'name');
+    }
+    
     public function scopeFilterInput($query)
     {
         if(request()->input('status')!=""){

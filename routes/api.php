@@ -31,7 +31,12 @@ Route::group(['prefix' => 'open', 'namespace' => 'Api\V1\Admin'], function () {
     Route::get('/logout', 'CustomersApiController@logout')->middleware('auth:api');
     Route::post('/reset', 'CustomersApiController@resetUser');
     Route::post('/user-block', 'CustomersApiController@userBlock');
+    Route::get('/products', 'ProductsApiController@index');
+    Route::get('product/{id}', 'ProductsApiController@show');
+    Route::get('/products-member', 'ProductsApiController@indexMember');
+    Route::get('/products-agent', 'ProductsApiController@indexAgent');
     Route::get('/agents', 'CustomersApiController@agentsOpen');
+Route::get('/test', 'CustomersApiController@test');
 });
 
 Route::group(['prefix' => 'close', 'namespace' => 'Api\V1\Admin', 'middleware' => 'auth:api'], function () {
@@ -72,8 +77,6 @@ Route::group(['prefix' => 'close', 'namespace' => 'Api\V1\Admin', 'middleware' =
     Route::get('logs-update-status/{id}', 'CustomersApiController@logsUpdate');
     Route::post('/upload-img/{id}', 'CustomersApiController@upImg');
     Route::get('test/{id}', 'OrdersApiController@test');
-    // Route::post('storeBlog', 'API\BlogController@store');
-    // Route::put('updateBlog/{id}', 'API\BlogController@update');
-    // Route::get('showBlog/{id}', 'API\BlogController@show');
-    // Route::delete('deleteBlog/{id}', 'API\BlogController@destroy');
+    Route::post('upgrade', 'CustomersApiController@upgrade');
+    Route::get('/products-member-upgrade/{id}', 'ProductsApiController@indexMemberUpgrade');
 });

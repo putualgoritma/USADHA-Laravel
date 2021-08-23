@@ -728,6 +728,8 @@ return [
             'fee_day_max_helper' => '',
             'activation_type_id' => 'Tipe Aktivasi',
             'activation_type_id_helper' => '',
+            'upgrade_type_id' => 'Tipe Upgrade',
+            'upgrade_type_id_helper' => '',
             'sbv' => 'Komisi dari BV (percent)',
             'sbv_helper' => '',
             'saving' => 'Poin Tabungan',

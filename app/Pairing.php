@@ -13,5 +13,7 @@ class Pairing extends Model
         'register',
         'ref2_id',
         'ref1_id',
+        'ref1_amount',
+        'ref2_amount',
     ];
 }

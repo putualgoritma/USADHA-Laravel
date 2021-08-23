@@ -59,6 +59,7 @@
                     <option value="reseller"{{ $package->package_type == 'reseller' ? 'selected="selected"' : '' }}>Reseller</option>
                     <option value="refill"{{ $package->package_type == 'refill' ? 'selected="selected"' : '' }}>Refill</option>
                     <option value="conventional"{{ $package->package_type == 'conventional' ? 'selected="selected"' : '' }}>Conventional</option>
+                    <option value="upgrade"{{ $package->package_type == 'upgrade' ? 'selected="selected"' : '' }}>Upgrade</option>
                 </select>
                 @if($errors->has('package_type'))
                     <em class="invalid-feedback">
@@ -87,6 +88,26 @@
                 @endif
                 <p class="helper-block">
                     {{ trans('global.networkfee.fields.activation_type_id_helper') }}
+                </p>
+            </div>
+
+            <div class="form-group {{ $errors->has('upgrade_type_id') ? 'has-error' : '' }}">
+                <label for="upgrade_type_id">{{ trans('global.networkfee.fields.upgrade_type_id') }}*</label>
+                <select name="upgrade_type_id" class="form-control">
+                    <option value="0">-- choose activation --</option>
+                    @foreach ($activations as $activation)
+                        <option value="{{ $activation->id }}"{{ $package->upgrade_type_id == $activation->id ? ' selected' : '' }}>
+                        {{ $activation->code }}-{{ $activation->name }} {{ $activation->last_name }}
+                        </option>
+                    @endforeach
+                </select>
+                @if($errors->has('upgrade_type_id'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('upgrade_type_id') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.networkfee.fields.upgrade_type_id_helper') }}
                 </p>
             </div>
 
