@@ -77,6 +77,8 @@ Route::group(['prefix' => 'close', 'namespace' => 'Api\V1\Admin', 'middleware' =
     Route::get('logs-update-status/{id}', 'CustomersApiController@logsUpdate');
     Route::post('/upload-img/{id}', 'CustomersApiController@upImg');
     Route::get('test/{id}', 'OrdersApiController@test');
+    // Route::get('downline-test/{id}', 'CustomersApiController@downlineTest');
+
     Route::post('upgrade', 'CustomersApiController@upgrade');
     Route::get('/products-member-upgrade/{id}', 'ProductsApiController@indexMemberUpgrade');
 });

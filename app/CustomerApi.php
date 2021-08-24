@@ -32,11 +32,18 @@ class CustomerApi extends Authenticatable
         'updated_at',
         'deleted_at',
         'status_block',
+        'lat',
+        'lng',
     ];
 
     public function activations()
     {
         return $this->belongsTo(Activation::class, 'activation_type_id')->select('id', 'name');
+    }
+
+    public function refferal()
+    {
+        return $this->belongsTo(CustomerApi::class, 'ref_id')->select('id', 'code', 'name');
     }
 
     /**
