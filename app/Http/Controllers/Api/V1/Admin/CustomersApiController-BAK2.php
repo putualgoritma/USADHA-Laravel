@@ -867,7 +867,7 @@ class CustomersApiController extends Controller
             $points_balance = $points_debit - $points_credit;
 
             //get package price & cogs
-            $package = Product::select('price', 'cogs', 'bv', 'activation_type_id', 'upgrade_type_id')
+            $package = Product::select('price', 'cogs', 'bv', 'activation_type_id')
                 ->where('id', '=', $request->input('package_id'))
                 ->get();
             $package = json_decode($package, false);
@@ -1045,7 +1045,7 @@ class CustomersApiController extends Controller
                 //$member->parent_id = $parent_id;
                 //$member->activation_at = $activation_at;
                 //$member->status = 'active';
-                $member->activation_type_id = $package_upgrade_type_id;
+                $member->activation_type_id = $package_upgrade_type_id + 1;
                 $member->save();
                 /*set order*/
                 //set def
