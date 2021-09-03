@@ -36,7 +36,8 @@ Route::group(['prefix' => 'open', 'namespace' => 'Api\V1\Admin'], function () {
     Route::get('/products-member', 'ProductsApiController@indexMember');
     Route::get('/products-agent', 'ProductsApiController@indexAgent');
     Route::get('/agents', 'CustomersApiController@agentsOpen');
-Route::get('/test', 'CustomersApiController@test');
+    Route::get('/test', 'CustomersApiController@test');
+    Route::get('/location', 'CustomersApiController@location');
 });
 
 Route::group(['prefix' => 'close', 'namespace' => 'Api\V1\Admin', 'middleware' => 'auth:api'], function () {

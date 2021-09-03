@@ -26,6 +26,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use OneSignal;
 use Validator;
+use App\Province;
+use App\City;
 
 class CustomersApiController extends Controller
 {
@@ -220,8 +222,7 @@ class CustomersApiController extends Controller
 
         $user = CustomerApi::where('email', request('email'))
             ->where('type', 'member')
-            ->with('activations')
-            ->with('refferal')
+            ->with(['activations', 'refferal', 'provinces', 'city'])
             ->first();
         if (!empty($user)) {
             if ((Hash::check(request('password'), $user->password)) && ($user->status_block == 0)) {
@@ -340,7 +341,9 @@ class CustomersApiController extends Controller
             'password' => 'required',
             'address' => 'required',
             'lat' => 'required',
-            'lng' => 'required'
+            'lng' => 'required',
+            'province_id' => 'required',
+            'city_id' => 'required'
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -349,7 +352,8 @@ class CustomersApiController extends Controller
             ], 401);
         }
         $input = $request->all();
-        $member = CustomerApi::with('activations')->where('id', $input['id'])->first();
+        // $member = CustomerApi::with('activations')->where('id', $input['id'])->first();
+        $member = CustomerApi::with(['activations', 'provinces', 'city'])->where('id', $input['id'])->first();
         $password_raw = $input['password'];
         $input['password'] = bcrypt($input['password']);
         $member->password = $input['password'];
@@ -359,6 +363,8 @@ class CustomersApiController extends Controller
         $member->address = $input['address'];
         $member->lat = $input['lat'];
         $member->lng = $input['lng'];
+        $member->province_id= $input['province_id'];
+        $member->city_id= $input['city_id'];
         try {
             $member->save();
         } catch (QueryException $exception) {
@@ -1678,6 +1684,26 @@ class CustomersApiController extends Controller
             'message' => $message,
             'data' => $agent,
         ]);
+    }
+    public function location()
+    {
+        try {
+            $province = Province::all();
+            $city = City::all();
+
+            return response()->json([
+                'code'=> 200,
+                'message' => 'success',
+                'province' => $province,
+                'city' => $city 
+            ]);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'code' => 404,
+                'message' => 'failed',
+                'data' => $th
+            ]);
+        }
     }
 
 }

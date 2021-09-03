@@ -36,11 +36,24 @@ class Customer extends Model
         'description',
         'activation_type_id',
         'activation_at',
+        'province_id',
+        'city_id'
     ];
 
     public function activations()
     {
         return $this->belongsTo(Activation::class, 'activation_type_id')->select('id', 'name');
+    }
+
+        
+    public function provinces( )
+    {
+        return $this->belongsTo(Province::class, 'province_id')->select('id', 'title');
+    }
+
+    public function city( )
+    {
+        return $this->belongsTo(City::class, 'city_id')->select('id', 'title');
     }
     
     public function scopeFilterInput($query)
