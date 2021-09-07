@@ -401,6 +401,8 @@ class CustomersApiController extends Controller
             'password' => 'required',
             'register' => 'required',
             'address' => 'required',
+            'province_id' => 'required',
+            'city_id' => 'required'
         ]);
         if ($validator->fails()) {
             return response()->json([
