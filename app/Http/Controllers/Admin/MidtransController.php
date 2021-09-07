@@ -105,12 +105,12 @@ class MidtransController extends Controller
             $order = explode('-', $notification->order_id);
             // assign variabel untuk memudahkan coding 
 
-            $status = $notification->transaction_status;
+            $status = $notification->transaction_status; 
             $type = $notification->payment_type;
             $fraud = $notification->fraud_status;
             // $order_id = 'Midtrans tes-' . $notification->order_id;
             
-            $order_id = $order[1];
+            $order_id  =  $order[1];
 
             // cari transaski berdarkan id
             $topup = Topup::findOrFail($order_id);
