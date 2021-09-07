@@ -142,3 +142,10 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'namespace' => 'Admin', 'mi
     Route::get('receivables-trs-edit/{id}', 'ReceivableTrsController@editTrs')->name('receivables.editTrs');
     Route::delete('receivables-trs-destroy/{id}', 'ReceivableTrsController@destroyTrs')->name('receivables.destroyTrs');
 });
+
+Route::group(['prefix' => 'admin', 'as' => 'midtrans.', 'namespace' => 'Admin'], function () {
+    Route::get('midtrans/finish', 'MidtransController@finishRedirect')->name('finish');
+    Route::get('midtrans/unfinish', 'MidtransController@unfinishRedirect')->name('unfinish');
+    Route::get('midtrans/failed', 'MidtransController@errorRedirect')->name('error');
+    Route::post('midtrans/callback', 'MidtransController@notificationHandlerTopup')->name('notifiactionTopup');
+});

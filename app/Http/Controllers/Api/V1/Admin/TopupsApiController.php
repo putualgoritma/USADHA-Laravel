@@ -14,6 +14,8 @@ use App\Withdraw;
 use Berkayk\OneSignal\OneSignalClient;
 use OneSignal;
 use App\LogNotif;
+use Midtrans\Config;
+use Midtrans\Snap;
 
 class TopupsApiController extends Controller
 {
@@ -305,6 +307,115 @@ class TopupsApiController extends Controller
                 'message' => $message,
                 'data' => $orderpoint,
             ]);
+        }
+    }
+    public function topupMAP(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'amount' => 'required',
+        ]);
+        if ($validator->fails()) {
+            return response()->json([
+                'code' => '401',
+                'success' => false,
+                'message' => $validator->errors(),
+            ], 401);
+        }
+
+        //get total
+        $total = $request->input('amount');
+        $points_id = 1;
+
+        //set def
+        $customers_id = $request->input('customers_id');
+        $warehouses_id = 1;
+        $last_code = $this->get_last_code('topup');
+        $code = acc_code_generate($last_code, 8, 3);
+        $member = Customer::find($customers_id);
+        $memo="Topup Poin ".$member->code."-".$member->name;
+        //set topup
+        $register=date("Y-m-d");
+        $data = array_merge($request->all(), ['code' => $code, 'total' => $total, 'type' => 'topup', 'status' => 'pending', 'ledgers_id' => 0, 'customers_id' => $customers_id, 'payment_type' => 'cash', 'register' => $register, 'memo' => $memo, 'acc_pay' => $request->input('accounts_id')]);
+        $topup = Topup::create($data);
+        //set topup points
+
+        $topup->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhold', 'memo' => $memo, 'customers_id' => $customers_id]);
+
+        //push notif
+        $user_os = Customer::find($customers_id);
+        $id_onesignal = $user_os->id_onesignal;
+        $memo = 'Hallo ' . $user_os->name . ', Permohonan Topup sejumlah '.$topup->total.' sedang menunggu persetujuan. Silahkan konfirmasi pembayaran Topup ke Admin secepatnya.';
+        $register = date("Y-m-d");
+        //store to logs_notif
+        $data = ['register' => $register, 'customers_id' => $customers_id, 'memo' => $memo];
+        $logs = LogNotif::create($data);
+        
+        if($topup){
+            Config::$serverKey = config('midtrans.serverKey');
+            Config::$isProduction = config('midtrans.isProduction');
+            Config::$isSanitized = config('midtrans.isSanitized');
+            Config::$is3ds = config('midtrans.is3ds');
+
+            $midtrans_params = [
+                'transaction_details' => [
+                    'order_id' => "$request->customer_name-$topup->id",
+                    'gross_amount' => $request->amount, //harus int kalau string ikuti => (int) variabel harga
+                ],
+                'customer_details' => [
+                    'first_name' => $request->customer_name,
+                    'email' => "$request->customer_email"
+                ],
+                'enabled_payments' => [
+                    "bca_va", "gopay", "indomaret", "alfamart"
+                ], //ini kita kana menggunakan gopay saja
+                'vtweb' => [] //ini intinya kita akan menggunakan snap redirect atau bisa di sebut vtweb juga
+            ];
+
+            try {
+                // Ambil halaman payment gateway midtrans
+                $paymentUrl = Snap::createTransaction($midtrans_params)->redirect_url;
+
+                 //push notif
+                if($id_onesignal!=""){
+                if($user_os->type=='agent'){
+                    OneSignal::sendNotificationToUser(
+                        $memo,
+                        $id_onesignal,
+                        $url = null,
+                        $data = null,
+                        $buttons = null,
+                        $schedule = null
+                    );
+                }else{
+                    $this->onesignal_client->sendNotificationToUser(
+                        $memo,
+                        $id_onesignal,
+                        $url = null,
+                        $data = null,
+                        $buttons = null,
+                        $schedule = null
+                    );
+                }}
+
+                // redirectke halaman nmidtrans
+                return response()->json([
+                    'message' => 'succes',
+                    'urimap' => $paymentUrl,
+                ]);
+
+            } catch (\Exception $e) {
+            //    return  $e->getMessage();
+                return response()->json([
+                    'message' => 'failed',
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }else{
+            return response()->json([
+                'code' => '401',
+                'success' => false,
+                'message' => $validator->errors(),
+            ], 401);
         }
     }
 }

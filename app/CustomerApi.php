@@ -34,6 +34,8 @@ class CustomerApi extends Authenticatable
         'status_block',
         'lat',
         'lng',
+        'province_id',
+        'city_id'
     ];
 
     public function activations()
@@ -46,6 +48,16 @@ class CustomerApi extends Authenticatable
         return $this->belongsTo(CustomerApi::class, 'ref_id')->select('id', 'code', 'name');
     }
 
+            
+    public function provinces( )
+    {
+        return $this->belongsTo(Province::class, 'province_id')->select('id', 'title');
+    }
+
+    public function city( )
+    {
+        return $this->belongsTo(City::class, 'city_id')->select('id', 'title');
+    }
     /**
      * The attributes that should be hidden for arrays.
      *
