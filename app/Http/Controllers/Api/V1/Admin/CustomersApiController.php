@@ -263,6 +263,7 @@ class CustomersApiController extends Controller
 
         $user = CustomerApi::where('email', request('email'))
             ->where('type', 'agent')
+            ->with(['provinces', 'city'])
             ->first();
         if ((Hash::check(request('password'), $user->password)) && ($user->status_block == 0)) {
             Auth::login($user);
@@ -806,6 +807,8 @@ class CustomersApiController extends Controller
             'password' => 'required',
             'register' => 'required',
             'address' => 'required',
+            'province_id' => 'required',
+            'city_id' => 'required'
         ]);
         if ($validator->fails()) {
             return response()->json([

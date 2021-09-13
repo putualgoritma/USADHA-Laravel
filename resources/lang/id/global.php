@@ -981,4 +981,14 @@ return [
             'deleted_at_helper' => '',
         ],
     ],
+    'statistic' => [
+        'title' => 'Statistik',
+        'title_singular' => 'Statistik',
+        'fields' => [
+           'month' => 'Bulan',
+           'year' => 'Tahun',
+           'omset_global' => 'Penjualan Global',
+           'omset_product' => 'Penjualan Produk'
+        ],
+    ],
 ];
