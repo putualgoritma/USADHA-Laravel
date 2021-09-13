@@ -261,6 +261,30 @@
                     </li>
                 </ul>
             </li>
+            <li class="nav-item nav-dropdown">
+                <a class="nav-link  nav-dropdown-toggle">
+                    <i class="fas fa-chart-line nav-icon"></i>
+
+                    </i>
+                    {{ trans('global.statistic.title') }}
+                </a>
+                <ul class="nav-dropdown-items">                    
+                    <li class="nav-item">
+                        <a href="{{ route("admin.statistik.index") }}" class="nav-link">
+                            <i class="fas fa-chart-bar nav-icon"></i>
+                            {{ trans('global.statistic.fields.omset_global') }}
+                        </a>
+                    </li>   
+                </ul>
+                <ul class="nav-dropdown-items">                    
+                    <li class="nav-item">
+                        <a href="{{ route("admin.statistik.product") }}" class="nav-link">
+                            <i class="fas fa-chart-pie  nav-icon"></i>
+                            {{ trans('global.statistic.fields.omset_product') }}
+                        </a>
+                    </li>   
+                </ul>
+            </li>
 
             <li class="nav-item nav-dropdown">
                 <a class="nav-link  nav-dropdown-toggle">
