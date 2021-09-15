@@ -284,6 +284,14 @@
                         </a>
                     </li>   
                 </ul>
+                <ul class="nav-dropdown-items">                    
+                    <li class="nav-item">
+                        <a href="{{ route("admin.statistik.member") }}" class="nav-link">
+                            <i class="fas fa-user nav-icon"></i>
+                            {{ trans('global.statistic.fields.member') }}
+                        </a>
+                    </li>   
+                </ul>
             </li>
 
             <li class="nav-item nav-dropdown">
