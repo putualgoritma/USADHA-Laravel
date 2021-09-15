@@ -988,7 +988,8 @@ return [
            'month' => 'Bulan',
            'year' => 'Tahun',
            'omset_global' => 'Penjualan Global',
-           'omset_product' => 'Penjualan Produk'
+           'omset_product' => 'Penjualan Produk',
+           'member'=>'Member'
         ],
     ],
 ];

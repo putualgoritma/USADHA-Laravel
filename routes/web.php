@@ -143,6 +143,8 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'namespace' => 'Admin', 'mi
     Route::delete('receivables-trs-destroy/{id}', 'ReceivableTrsController@destroyTrs')->name('receivables.destroyTrs');
     Route::get('statistik', 'StatistikController@index')->name('statistik.index');
     Route::get('statistik/product', 'StatistikController@product')->name('statistik.product');
+    Route::get('statistik/member', 'StatistikController@member')->name('statistik.member');
+
 });
 
 Route::group(['prefix' => 'admin', 'as' => 'midtrans.', 'namespace' => 'Admin'], function () {
