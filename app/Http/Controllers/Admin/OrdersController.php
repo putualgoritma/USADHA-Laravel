@@ -88,8 +88,7 @@ class OrdersController extends Controller
                 ->with('accounts')
                 ->FilterInput()
                 ->FilterCustomer()
-                ->orderBy("register", "desc")
-                ->get();
+                ->orderBy("register", "desc");
 
             $table = Datatables::of($query);
 
@@ -168,8 +167,7 @@ class OrdersController extends Controller
         //def view
         $orders = Order::with('products')
             ->with('customers')
-            ->with('accounts')
-            ->get();
+            ->with('accounts');
 
         $customers = Customer::select('*')
             ->where(function ($query) {

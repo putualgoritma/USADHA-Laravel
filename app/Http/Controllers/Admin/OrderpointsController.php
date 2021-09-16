@@ -19,8 +19,7 @@ class OrderpointsController extends Controller
                 ->with('customers')
                 ->where('status', 'onhand')
                 ->orderBy('id','DESC')
-                ->FilterInput()
-                ->get();
+                ->FilterInput();
             $table = Datatables::of($query);
 
             $table->addColumn('placeholder', '&nbsp;');
@@ -62,8 +61,7 @@ class OrderpointsController extends Controller
         $orderpoints = OrderPoint::with('orders')
             ->with('customers')
             ->where('status', 'onhand')
-            ->orderBy('id','DESC')
-            ->get();
+            ->orderBy('id','DESC');
 
         $customers = Customer::select('*')
             ->where(function ($query) {

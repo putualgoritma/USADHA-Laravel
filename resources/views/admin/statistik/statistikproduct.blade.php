@@ -74,6 +74,12 @@
         </div>
     </div>
 
+    <div class="row" >
+        <div class="scrollmenu " style="width: 50%">
+            <canvas id="myDoughnut2"></canvas>
+        </div>
+    </div>
+
 @endsection
 @section('scripts')
 @parent
@@ -94,6 +100,24 @@
     var pieChart = new Chart(myDoughnut, {
         type: 'doughnut',
         data: myDoughnutData
+    });
+
+    var myDoughnut2 = document.getElementById('myDoughnut2');
+
+    var myDoughnut2Data = {
+        labels:  {!!json_encode($chart2->labels)!!} ,
+        datasets: [
+            {
+                // label: 'Statistik Total Transaksi Perusahaan',
+                backgroundColor: {!! json_encode($chart2->colours)!!} ,
+                data:  {!! json_encode($chart2->dataset)!!} ,
+            },
+        ]
+    };
+
+    var pieChart = new Chart(myDoughnut2, {
+        type: 'doughnut',
+        data: myDoughnut2Data
     });
 </script>
 @endsection

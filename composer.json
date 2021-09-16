@@ -16,7 +16,9 @@
         "laravel/framework": "^6.0",
         "laravel/passport": "^8.4",
         "laravel/tinker": "^1.0",
+        "midtrans/midtrans-php": "^2.5",
         "vinkla/hashids": "^7.0",
+        "lcobucci/jwt": "3.4.5",
         "yajra/laravel-datatables-oracle": "~9.0"
     },
     "require-dev": {
