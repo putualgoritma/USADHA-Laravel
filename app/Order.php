@@ -81,19 +81,7 @@ class Order extends Model
             $type = request()->input('type'); 
             return $query->where('type', $type);
         }else{
-            return $query->where(function ($querys) {
-                $querys->where('type', 'sale')
-                ->orWhere('type', 'topup')
-                ->orWhere('type', 'sale_retur')
-                ->orWhere('type', 'transfer')
-                ->orWhere('type', 'withdraw')
-                ->orWhere('type', 'production')
-                ->orWhere('type', 'buy')
-                ->orWhere('type', 'buy_retur')
-                ->orWhere('type', 'agent_sale')
-                ->orWhere('type', 'activation_member')
-                ->orWhere('type', 'stock_trsf');
-            });
+            return ;
         }
     }
 
