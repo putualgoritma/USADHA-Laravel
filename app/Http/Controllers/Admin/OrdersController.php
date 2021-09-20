@@ -88,6 +88,7 @@ class OrdersController extends Controller
                 ->with('accounts')
                 ->FilterInput()
                 ->FilterCustomer()
+                ->FilterRangeDate()
                 ->orderBy("register", "desc");
 
             $table = Datatables::of($query);
