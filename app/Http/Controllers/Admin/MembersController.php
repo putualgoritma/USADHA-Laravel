@@ -9,6 +9,7 @@ use App\Http\Requests\StoreMemberRequest;
 use App\Http\Requests\UpdateMemberRequest;
 use App\Member;
 use App\Order;
+use App\Ledger;
 use App\OrderDetails;
 use App\OrderPoint;
 use App\Package;
@@ -53,7 +54,7 @@ class MembersController extends Controller
                 ->leftJoin('order_points', 'order_points.customers_id', '=', 'customers.id')
                 ->where(function ($qry) {
                     $qry->where('customers.type', '=', 'member')
-                            ->orWhere('customers.def', '=', '1');
+                        ->orWhere('customers.def', '=', '1');
                 })
                 ->orderBy("customers.register", "DESC")
                 ->groupBy('customers.id')
@@ -319,6 +320,20 @@ class MembersController extends Controller
 
         //check if pending
         if ($member->status == 'pending') {
+            $orders = Order::where('customers_id', $member->id)
+                ->orWhere('customers_activation_id', $member->id)
+                ->get();
+            foreach ($orders as $key => $order) {
+                if ($order->ledgers_id > 0) {
+                    $ledger = Ledger::find($order->ledgers_id);
+                    $ledger->accounts()->detach();
+                    $ledger->delete();
+                }
+                $order->products()->detach();
+                $order->productdetails()->detach();
+                $order->points()->detach();
+                $order->delete();
+            }
             $member->delete();
         } else {
             return back()->withError('Gagal Delete, Member Active!');
