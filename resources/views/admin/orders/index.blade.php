@@ -55,7 +55,7 @@
                                     <div class="input-group-addon">
                                         <span class="glyphicon glyphicon-th"></span>
                                     </div>
-                                    <input id="from" placeholder="masukkan tanggal Awal" type="date" class="form-control datepicker" name="from" value = "{{date('Y-m-d')}}">
+                                    <input id="from" placeholder="masukkan tanggal Awal" type="date" class="form-control datepicker" name="from" value = "{{date('Y-m-01')}}">
                                 </div>
                             </div>
                             <div class="form-group">
@@ -133,29 +133,22 @@
     let type = searchParams.get('type')
     if (type) {
         $("#type").val(type);
-    }else{
-        $("#type").val('');
     }
+
     let customer = searchParams.get('customer')
     if (customer) {
         $("#customer").val(customer);
-    }else{
-        $("#customer").val('');
     }
     // date from unutk start tanggal 
     let from = searchParams.get('from')
     if (from) {
         $("#from").val(from);
-    }else{
-        $("#from").val('');
     }
 
     // date to untuk batas tanggal 
     let to = searchParams.get('to')
     if (to) {
         $("#to").val(to);
-    }else{
-        $("#to").val('');
     }
   
   let dtButtons = $.extend(true, [], $.fn.dataTable.defaults.buttons)
@@ -207,24 +200,24 @@
       headers: {'x-csrf-token': _token},
       method: 'GET',
       data: {
-        'type': searchParams.get('type'),
-        'customer': searchParams.get('customer'),
-        'from' : searchParams.get('from'),
-        'to' : searchParams.get('to')
+        'type':  $("#type").val(),
+        'customer':  $("#customer").val(),
+        'from' :   $("#from").val(),
+        'to' :  $("#to").val(),
       }
     },
     columns: [
         { data: 'placeholder', name: 'placeholder' },
-        { data: 'DT_RowIndex', name: 'no' },
+        { data: 'DT_RowIndex', name: 'no', searchable: false },
         { data: 'code', name: 'code' },
         { data: 'register', name: 'register' },
-        { data: 'name', name: 'name' },
+        { data: 'name', name: 'name', searchable: false  },
         { data: 'status', name: 'status' },
         { data: 'status_delivery', name: 'status_delivery' },
         { data: 'memo', name: 'memo' },        
-        { data: 'accpay', name: 'accpay' },
-        { data: 'amount', name: 'amount' },
-        { data: 'product', name: 'product' },
+        { data: 'accpay', name: 'accpay',  searchable: false  },
+        { data: 'amount', name: 'amount', searchable: false},
+        { data: 'product', name: 'product',searchable: false },
         { data: 'actions', name: '{{ trans('global.actions') }}' }
     ],
     pageLength: 100,
@@ -264,3 +257,12 @@
 
 </script>
 @endsection
+<script type="text/javascript">
+    $(function(){
+     $(".datepicker").datepicker({
+         format: 'yyyy-mm-dd',
+         autoclose: true,
+         todayHighlight: true,
+     });
+    });
+</script>

@@ -49,9 +49,11 @@ class TopupsApiController extends Controller
         $points_id = 1;
         $points_debit = OrderPoint::where('customers_id', '=', $request->customers_id)
             ->where('type', '=', 'D')
+            ->where('status', '=', 'onhand')
             ->sum('amount');
         $points_credit = OrderPoint::where('customers_id', '=', $request->customers_id)
             ->where('type', '=', 'C')
+            ->where('status', '=', 'onhand')
             ->sum('amount');
         $points_balance = $points_debit - $points_credit;
         //set member destination

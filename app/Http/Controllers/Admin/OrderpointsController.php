@@ -13,13 +13,20 @@ class OrderpointsController extends Controller
     public function index(Request $request)
     {
         abort_unless(\Gate::allows('orderpoint_access'), 403);
+        $from = !empty($request->from) ? $request->from : date('Y-m-01'); 
+        $to = !empty($request->to) ? $request->to :date('Y-m-d'); 
 
+        // dd('halo', $from .' '. $to);
         if ($request->ajax()) {
-            $query = OrderPoint::with('orders')
+            $query = OrderPoint::selectRaw('order_points.*')->join('orders', 'order_points.orders_id', '=', 'orders.id')
+                ->whereBetween('orders.created_at', [$from, $to])
+                // ->with('orders')
                 ->with('customers')
-                ->where('status', 'onhand')
-                ->orderBy('id','DESC')
-                ->FilterInput();
+                ->where('order_points.status', 'onhand')
+                ->FilterInput()
+                ->orderBy('order_points.id','DESC');
+
+            
             $table = Datatables::of($query);
 
             $table->addColumn('placeholder', '&nbsp;');
@@ -57,7 +64,7 @@ class OrderpointsController extends Controller
             $table->addIndexColumn();
             return $table->make(true);
         }
-        //def view
+        // //def view
         $orderpoints = OrderPoint::with('orders')
             ->with('customers')
             ->where('status', 'onhand')

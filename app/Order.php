@@ -95,9 +95,9 @@ class Order extends Model
         }
     }
 
-    public function scopeFilterRangeDate($query)
+    public function scopeFilterRangeDate($query, $from, $to )
     {
-        if(!empty(request()->input('from')) && !empty($request->input('to'))){
+        if(!empty($from)&& !empty($to)){
             $from = request()->input('from'); 
             $to =  request()->input('to'); 
             // $from = '2021-09-01';
@@ -107,7 +107,9 @@ class Order extends Model
             // dd(request()->input('from'));
             
         }else{
-            return ;
+            $from = date('Y-m-01'); 
+            $to = date('Y-m-d');
+            return $query->whereBetween('register', [$from, $to]);
         }
     }
 

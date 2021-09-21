@@ -81,6 +81,9 @@ class OrdersController extends Controller
     {
         abort_if(Gate::denies('order_access'), Response::HTTP_FORBIDDEN, '403 Forbidden');
 
+        $from = !empty($request->from) ? $request->from : date('Y-m-01'); 
+        $to = !empty($request->to) ? $request->to :date('Y-m-d'); 
+        // dd($request->all());
         if ($request->ajax()) {
 
             $query = Order::with('products')
@@ -88,7 +91,8 @@ class OrdersController extends Controller
                 ->with('accounts')
                 ->FilterInput()
                 ->FilterCustomer()
-                ->FilterRangeDate()
+                // ->FilterRangeDate(null, $from, $to)
+                ->whereBetween('register', [$from, $to])
                 ->orderBy("register", "desc");
 
             $table = Datatables::of($query);

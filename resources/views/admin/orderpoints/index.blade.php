@@ -7,22 +7,47 @@
 
     <div class="card-body">
     <div class="form-group">
-        <div class="col-md-6">
-                <form action="" id="filtersForm"> 
-                <div class="input-group">
-                    <select id="customer" name="customer" class="form-control">
-                    <option value="">== Semua User ==</option>
-                    @foreach($customers as $customer)
-                    <option value="{{$customer->id}}">{{ $customer->code}} - {{ $customer->name}}</option>
-                    @endforeach
-                    </select>
-                    <span class="input-group-btn">
-                    &nbsp;&nbsp;<input type="submit" class="btn btn-primary" value="Filter">
-                    </span>
-                </div>                
-                </form>
-                </div>
+        <form action="" id="filtersForm"> 
+            <div class="col-md-6">
+                {{-- <div class="row"> --}}
+                    {{-- <div class="col-md-6"> --}}
+                        <div class="form-group">
+                            <div class="input-group">
+                                <select id="customer" name="customer" class="form-control">
+                                <option value="">== Semua User ==</option>
+                                @foreach($customers as $customer)
+                                <option value="{{$customer->id}}">{{ $customer->code}} - {{ $customer->name}}</option>
+                                @endforeach
+                                </select>
+                            </div>               
+                        </div>
+                    {{-- </div>
+                    <div class="col-md-6"> --}}
+                        <div class="form-group">
+                            {{-- <label>Dari Tanggal</label> --}}
+                            <div class="input-group date">
+                                <div class="input-group-addon">
+                                    <span class="glyphicon glyphicon-th"></span>
+                                </div>
+                                <input id="from" placeholder="masukkan tanggal Awal" type="date" class="form-control datepicker" name="from" value = "{{date('Y-m-01')}}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            {{-- <label>Sampai Tanggal</label> --}}
+                            <div class="input-group date">
+                                <div class="input-group-addon">
+                                    <span class="glyphicon glyphicon-th"></span>
+                                </div>
+                                <input id="to" placeholder="masukkan tanggal Akhir" type="date" class="form-control datepicker" name="to" value = "{{date('Y-m-d')}}">
+                            </div>
+                        </div>
+                    {{-- </div> --}}
+                 {{-- </div> --}}
+                 <span class="input-group-btn">
+                    <input type="submit" class="btn btn-primary" value="Filter">
+                </span>
             </div>
+        </form>
         <div class="row">
             </div>
         <div class="table-responsive">
@@ -72,8 +97,17 @@
     let customer = searchParams.get('customer')
     if (customer) {
         $("#customer").val(customer);
-    }else{
-        $("#customer").val('');
+    }
+      // date from unutk start tanggal 
+      let from = searchParams.get('from')
+    if (from) {
+        $("#from").val(from);
+    }
+
+    // date to untuk batas tanggal 
+    let to = searchParams.get('to')
+    if (to) {
+        $("#to").val(to);
     }
 
     let dtButtons = $.extend(true, [], $.fn.dataTable.defaults.buttons)
@@ -90,7 +124,9 @@
       headers: {'x-csrf-token': _token},
       method: 'GET',
       data: {
-        'customer': searchParams.get('customer'),
+        'customer':  $("#customer").val(),
+        'from' :   $("#from").val(),
+        'to' :  $("#to").val(),
       }
     },
     columns: [
@@ -149,3 +185,12 @@
 
 </script>
 @endsection
+<script type="text/javascript">
+    $(function(){
+     $(".datepicker").datepicker({
+         format: 'yyyy-mm-dd',
+         autoclose: true,
+         todayHighlight: true,
+     });
+    });
+</script>
