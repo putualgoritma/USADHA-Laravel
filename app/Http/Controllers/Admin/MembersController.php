@@ -48,6 +48,10 @@ class MembersController extends Controller
     {
         abort_unless(\Gate::allows('member_access'), 403);
 
+        $from = !empty($request->from) ? $request->from : date('Y-m-01'); 
+        $to = !empty($request->to) ? $request->to :date('Y-m-d'); 
+
+
         if ($request->ajax()) {
             $query = Member::selectRaw("customers.*,(SUM(CASE WHEN order_points.type = 'D' AND order_points.status = 'onhand' AND order_points.points_id = '1' THEN order_points.amount ELSE 0 END) - SUM(CASE WHEN order_points.type = 'C' AND order_points.status = 'onhand' AND order_points.points_id = '1' THEN order_points.amount ELSE 0 END)) AS amount_balance")
                 ->leftJoin('order_points', 'order_points.customers_id', '=', 'customers.id')
@@ -55,6 +59,7 @@ class MembersController extends Controller
                     $qry->where('customers.type', '=', 'member')
                             ->orWhere('customers.def', '=', '1');
                 })
+                ->whereBetween('customers.activation_at', [$from, $to])
                 ->orderBy("customers.register", "DESC")
                 ->groupBy('customers.id')
                 ->FilterInput()
