@@ -21,21 +21,41 @@
     <div class="card-body">
     <div class="form-group">
         <div class="col-md-6">
-                <form action="" id="filtersForm">
+            <form action="" id="filtersForm">
+                <div class="form-group">
                     <div class="input-group">
-                    
                     <select name="status-filter" id="status-filter" class="form-control">
-                    <option value="">== Semua Status ==</option>
-                    <option value="pending">Pending</option>
-                    <option value="active">Aktif</option>
+                        <option value="">== Semua Status ==</option>
+                        <option value="pending">Pending</option>
+                        <option value="active">Aktif</option>
                     </select>
-                    <span class="input-group-btn">
-                        <input type="submit" class="btn btn-primary" value="Filter">
-                    </span> 
-                    </div>
-                </form>
                 </div>
+               </div>
+
+                <div class="form-group">
+                    {{-- <label>Dari Tanggal</label> --}}
+                    <div class="input-group date">
+                        <div class="input-group-addon">
+                            <span class="glyphicon glyphicon-th"></span>
+                        </div>
+                        <input id="from" placeholder="masukkan tanggal Awal" type="date" class="form-control datepicker" name="from" value = "{{date('Y-m-01')}}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    {{-- <label>Sampai Tanggal</label> --}}
+                    <div class="input-group date">
+                        <div class="input-group-addon">
+                            <span class="glyphicon glyphicon-th"></span>
+                        </div>
+                        <input id="to" placeholder="masukkan tanggal Akhir" type="date" class="form-control datepicker" name="to" value = "{{date('Y-m-d')}}">
+                    </div>
+                </div>
+                <span class="input-group-btn">
+                    <input type="submit" class="btn btn-primary" value="Filter">
+                </span> 
+            </form>
             </div>
+        </div>
         <div class="table-responsive">
             <table class=" table table-bordered table-striped table-hover ajaxTable datatable datatable-members">
                 <thead>
@@ -88,12 +108,26 @@
     $(function () {
   let searchParams = new URLSearchParams(window.location.search)
   let deleteButtonTrans = '{{ trans('global.datatables.delete') }}'
-  let statusFilter = searchParams.get('status-filter')
-  if (statusFilter) {
-    $("#status-filter").val(statusFilter);
-  }else{
-    $("#status-filter").val('');
-  }  
+
+
+    let statusFilter = searchParams.get('status-filter')
+    if (statusFilter) {
+        $("#status-filter").val(statusFilter);
+    }
+
+      // date from unutk start tanggal 
+      let from = searchParams.get('from')
+    if (from) {
+        $("#from").val(from);
+    }
+
+    // date to untuk batas tanggal 
+    let to = searchParams.get('to')
+    if (to) {
+        $("#to").val(to);
+    }
+
+
   let deleteButton = {
     text: deleteButtonTrans,
     url: "{{ route('admin.members.massDestroy') }}",
@@ -135,7 +169,10 @@
     ajax: {
       url: "{{ route('admin.members.index') }}",
       data: {
-        'status': searchParams.get('status-filter'),
+        // 'status': searchParams.get('status-filter'),
+        'status':  $("#status-filter").val(),
+        'from' :   $("#from").val(),
+        'to' :  $("#to").val(),
       }
     },
     columns: [

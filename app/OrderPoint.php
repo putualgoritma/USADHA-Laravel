@@ -37,4 +37,14 @@ class OrderPoint extends Model
             return ;
         }
     }
+    public function scopeFilterInputJoin($query)
+    {
+        if(request()->input('customer')!=""){
+            $customer = request()->input('customer'); 
+
+            return $query->where('customers_id', $customer);
+        }else{
+            return ;
+        }
+    }
 }

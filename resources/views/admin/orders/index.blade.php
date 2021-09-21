@@ -15,91 +15,113 @@
     </div>
 
     <div class="card-body">
-    <div class="form-group">
-        <div class="col-md-6">
-                <form action="" id="filtersForm"> 
-                <div class="input-group">
-                    <select id="customer" name="customer" class="form-control">
-                    <option value="">== Semua User ==</option>
-                    @foreach($customers as $customer)
-                    <option value="{{$customer->id}}">{{ $customer->code}} - {{ $customer->name}}</option>
-                    @endforeach
-                    </select>
-                </div> 
-                <div class="row">
-                &nbsp;
-                </div> 
-                <div class="input-group">
-                    <select id="type" name="type" class="form-control">
-                    <option value="">== Semua Type ==</option>
-                    <option value="activation_member">Aktivasi Member</option>
-                    <option value="sale">Penjualan</option>
-                    <option value="sale_retur">Retur Penjualan</option>
-                    <option value="topup">Topup</option>
-                    <option value="transfer">Transfer</option>
-                    <option value="withdraw">Withdraw</option>
-                    <option value="agent_sale">Penjualan Agen</option>
-                    <option value="production">Produksi</option>                    
-                    <option value="buy">Pembelian</option>                    
-                    <option value="buy_retur">Retur Pembelian</option>
-                    <option value="stock_trsf">Transfer Stok</option>                    
-                    </select>
+        <div class="form-group">
+            <form action="" id="filtersForm"> 
+                <div class="col-md-12">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <select id="customer" name="customer" class="form-control">
+                                <option value="">== Semua User ==</option>
+                                @foreach($customers as $customer)
+                                <option value="{{$customer->id}}">{{ $customer->code}} - {{ $customer->name}}</option>
+                                @endforeach
+                                </select>
+                            </div> 
+                            <div class="row">
+                            &nbsp;
+                            </div> 
+                            <div class="input-group">
+                                <select id="type" name="type" class="form-control">
+                                <option value="">== Semua Type ==</option>
+                                <option value="activation_member">Aktivasi Member</option>
+                                <option value="sale">Penjualan</option>
+                                <option value="sale_retur">Retur Penjualan</option>
+                                <option value="topup">Topup</option>
+                                <option value="transfer">Transfer</option>
+                                <option value="withdraw">Withdraw</option>
+                                <option value="agent_sale">Penjualan Agen</option>
+                                <option value="production">Produksi</option>                    
+                                <option value="buy">Pembelian</option>                    
+                                <option value="buy_retur">Retur Pembelian</option>
+                                <option value="stock_trsf">Transfer Stok</option>                    
+                                </select>
+                            </div>                
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                {{-- <label>Dari Tanggal</label> --}}
+                                <div class="input-group date">
+                                    <div class="input-group-addon">
+                                        <span class="glyphicon glyphicon-th"></span>
+                                    </div>
+                                    <input id="from" placeholder="masukkan tanggal Awal" type="date" class="form-control datepicker" name="from" value = "{{date('Y-m-01')}}">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                {{-- <label>Sampai Tanggal</label> --}}
+                                <div class="input-group date">
+                                    <div class="input-group-addon">
+                                        <span class="glyphicon glyphicon-th"></span>
+                                    </div>
+                                    <input id="to" placeholder="masukkan tanggal Akhir" type="date" class="form-control datepicker" name="to" value = "{{date('Y-m-d')}}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <span class="input-group-btn">
-                    &nbsp;&nbsp;<input type="submit" class="btn btn-primary" value="Filter">
+                        <input type="submit" class="btn btn-primary" value="Filter">
                     </span>
-                </div>                
-                </form>
                 </div>
-            </div>
-        <div class="table-responsive">
-            <table class=" table table-bordered table-striped table-hover datatable datatable-Order ajaxTable datatable-orders"">
-                <thead>
-                    <tr>
-                        <th width="10">
+            </form>
+            <div class="table-responsive">
+                <table class=" table table-bordered table-striped table-hover datatable datatable-Order ajaxTable datatable-orders"">
+                    <thead>
+                        <tr>
+                            <th width="10">
 
-                        </th>
-                        <th>
-                            {{ trans('global.order.fields.id') }}
-                        </th>
-                        <th>
-                            {{ trans('global.order.fields.code') }}
-                        </th>
-                        <th>
-                            {{ trans('global.order.fields.register') }}
-                        </th>
-                        <th>
-                            {{ trans('global.order.fields.customers_id') }}
-                        </th>
-                        <th>
-                                Status Order
                             </th>
                             <th>
-                                Status Delivery
+                                {{ trans('global.order.fields.id') }}
                             </th>
-                        <th>
-                            {{ trans('global.order.fields.memo') }}
-                        </th>
-                        <th>
-                            Rekening
-                        </th>
-                        <th>
-                            Total
-                        </th>
-                        <th>
-                            {{ trans('global.order.fields.products') }}
-                        </th>
-                        <th>
-                            &nbsp;
-                        </th>
-                    </tr>
-                </thead>
-                <tfoot align="left">
-		            <tr><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th></tr>
-	            </tfoot>
-            </table>
+                            <th>
+                                {{ trans('global.order.fields.code') }}
+                            </th>
+                            <th>
+                                {{ trans('global.order.fields.register') }}
+                            </th>
+                            <th>
+                                {{ trans('global.order.fields.customers_id') }}
+                            </th>
+                            <th>
+                                    Status Order
+                                </th>
+                                <th>
+                                    Status Delivery
+                                </th>
+                            <th>
+                                {{ trans('global.order.fields.memo') }}
+                            </th>
+                            <th>
+                                Rekening
+                            </th>
+                            <th>
+                                Total
+                            </th>
+                            <th>
+                                {{ trans('global.order.fields.products') }}
+                            </th>
+                            <th>
+                                &nbsp;
+                            </th>
+                        </tr>
+                    </thead>
+                    <tfoot align="left">
+                        <tr><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th></tr>
+                    </tfoot>
+                </table>
+            </div>
         </div>
-
-
     </div>
 </div>
 @endsection
@@ -111,14 +133,22 @@
     let type = searchParams.get('type')
     if (type) {
         $("#type").val(type);
-    }else{
-        $("#type").val('');
     }
+
     let customer = searchParams.get('customer')
     if (customer) {
         $("#customer").val(customer);
-    }else{
-        $("#customer").val('');
+    }
+    // date from unutk start tanggal 
+    let from = searchParams.get('from')
+    if (from) {
+        $("#from").val(from);
+    }
+
+    // date to untuk batas tanggal 
+    let to = searchParams.get('to')
+    if (to) {
+        $("#to").val(to);
     }
   
   let dtButtons = $.extend(true, [], $.fn.dataTable.defaults.buttons)
@@ -170,22 +200,24 @@
       headers: {'x-csrf-token': _token},
       method: 'GET',
       data: {
-        'type': searchParams.get('type'),
-        'customer': searchParams.get('customer'),
+        'type':  $("#type").val(),
+        'customer':  $("#customer").val(),
+        'from' :   $("#from").val(),
+        'to' :  $("#to").val(),
       }
     },
     columns: [
         { data: 'placeholder', name: 'placeholder' },
-        { data: 'DT_RowIndex', name: 'no' },
+        { data: 'DT_RowIndex', name: 'no', searchable: false },
         { data: 'code', name: 'code' },
         { data: 'register', name: 'register' },
-        { data: 'name', name: 'name' },
+        { data: 'name', name: 'name', searchable: false  },
         { data: 'status', name: 'status' },
         { data: 'status_delivery', name: 'status_delivery' },
         { data: 'memo', name: 'memo' },        
-        { data: 'accpay', name: 'accpay' },
-        { data: 'amount', name: 'amount' },
-        { data: 'product', name: 'product' },
+        { data: 'accpay', name: 'accpay',  searchable: false  },
+        { data: 'amount', name: 'amount', searchable: false},
+        { data: 'product', name: 'product',searchable: false },
         { data: 'actions', name: '{{ trans('global.actions') }}' }
     ],
     pageLength: 100,
@@ -225,3 +257,12 @@
 
 </script>
 @endsection
+<script type="text/javascript">
+    $(function(){
+     $(".datepicker").datepicker({
+         format: 'yyyy-mm-dd',
+         autoclose: true,
+         todayHighlight: true,
+     });
+    });
+</script>

@@ -95,6 +95,24 @@ class Order extends Model
         }
     }
 
+    public function scopeFilterRangeDate($query, $from, $to )
+    {
+        if(!empty($from)&& !empty($to)){
+            $from = request()->input('from'); 
+            $to =  request()->input('to'); 
+            // $from = '2021-09-01';
+            // $to = '2021-09-20';
+            return $query->whereBetween('register', [$from, $to]);
+            // return $query->where('froms_id', $from);
+            // dd(request()->input('from'));
+            
+        }else{
+            $from = date('Y-m-01'); 
+            $to = date('Y-m-d');
+            return $query->whereBetween('register', [$from, $to]);
+        }
+    }
+
     public function accounts()
     {
         return $this->belongsTo(Account::class, 'acc_pay')->select('id', 'code', 'name');
