@@ -116,7 +116,7 @@
     }
 
       // date from unutk start tanggal 
-      let from = searchParams.get('from')
+    let from = searchParams.get('from')
     if (from) {
         $("#from").val(from);
     }
@@ -127,7 +127,7 @@
         $("#to").val(to);
     }
 
-
+    // alert(  $("#from").val())
   let deleteButton = {
     text: deleteButtonTrans,
     url: "{{ route('admin.members.massDestroy') }}",
