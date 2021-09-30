@@ -1,17 +1,8 @@
 @extends('layouts.admin')
 @section('content')
-@can('ledger_create')
-    <div style="margin-bottom: 10px;" class="row">
-        <div class="col-lg-12">
-            <a class="btn btn-success" href="{{ route("admin.ledgers.create") }}">
-                {{ trans('global.add') }} {{ trans('global.ledger.title_singular') }}
-            </a>
-        </div>
-    </div>
-@endcan
 <div class="card">
     <div class="card-header">
-        {{ trans('global.ledger.title_singular') }} {{ trans('global.list') }}
+        {{ trans('global.product.title_singular') }} {{ trans('global.list') }}
     </div>
 
     <div class="card-body">
@@ -19,6 +10,16 @@
                 <div class="col-md-12">
                     <div class="row">
                         <div class="col-md-6">
+                            <div class="form-group">
+                            <div class="input-group">
+                                <select id="product" name="product" class="form-control">
+                                <option value="">== Semua User ==</option>
+                                @foreach($products as $product)
+                                <option value="{{$product->id}}">{{ $product->code}} - {{ $product->name}}</option>
+                                @endforeach
+                                </select>
+                            </div>  
+                            </div>
                             <div class="form-group">
                                 {{-- <label>Dari Tanggal</label> --}}
                                 <div class="input-group date">
@@ -45,7 +46,7 @@
                 </div>
             </form>
         <div class="table-responsive">
-            <table class=" table table-bordered table-striped table-hover datatable ajaxTable datatable-ledger">
+            <table class=" table table-bordered table-striped table-hover  datatable ajaxTable datatable-orderproduct">
                 <thead>
                     <tr>
                         <th width="10">
@@ -55,29 +56,24 @@
                             No.
                         </th>
                         <th>
-                            {{ trans('global.ledger.fields.id') }}
+                            {{ trans('global.order.fields.register') }}
                         </th>
                         <th>
-                            {{ trans('global.ledger.fields.customers_id') }}
+                            {{ trans('global.product.fields.name') }}
                         </th>
                         <th>
-                            {{ trans('global.ledger.fields.register') }}
+                            Debit
                         </th>
                         <th>
-                            {{ trans('global.ledger.fields.memo') }}
-                        </th>
-                        <th>
-                            {{ trans('global.ledger.fields.accounts') }}
-                        </th>
-                        <th>
-                            &nbsp;
+                            Credit
                         </th>
                     </tr>
-                </thead>                
+                </thead>     
+                <tfoot align="left">
+                        <tr><th></th><th></th><th></th><th></th><th></th><th></th></tr>
+                    </tfoot>           
             </table>
         </div>
-
-
     </div>
 </div>
 @section('scripts')
@@ -85,6 +81,10 @@
 <script>
     $(function () {
     let searchParams = new URLSearchParams(window.location.search)
+    let product = searchParams.get('product')
+    if (product) {
+        $("#product").val(product);
+    }
     // date from unutk start tanggal 
     let from = searchParams.get('from')
     if (from) {
@@ -102,7 +102,7 @@
   let deleteButtonTrans = '{{ trans('global.datatables.delete') }}'
   let deleteButton = {
     text: deleteButtonTrans,
-    url: "{{ route('admin.ledgers.massDestroy') }}",
+    url: "{{ route('admin.orders.massDestroy') }}",
     className: 'btn-danger',
     action: function (e, dt, node, config) {
       var ids = $.map(dt.rows({ selected: true }).nodes(), function (entry) {
@@ -132,7 +132,7 @@
     order: [[ 1, 'desc' ]],
     pageLength: 100,
   });
-  $('.datatable-ledger:not(.ajaxTable)').DataTable({ buttons: dtButtons })
+  $('.datatable-orderproduct:not(.ajaxTable)').DataTable({ buttons: dtButtons })
 
   let dtOverrideGlobals = {
     processing: true,
@@ -140,11 +140,12 @@
     retrieve: true,
     aaSorting: [],
     ajax: {
-      url: "{{ route('admin.ledgers.index') }}",
+      url: "{{ route('admin.order-package.index') }}",
       dataType: "json",
       headers: {'x-csrf-token': _token},
       method: 'GET',
       data: {
+        'product':  $("#product").val(),
         'from' :   $("#from").val(),
         'to' :  $("#to").val(),
       }
@@ -152,18 +153,47 @@
     columns: [
         { data: 'placeholder', name: 'placeholder' },
         { data: 'DT_RowIndex', name: 'no', searchable: false },
-        { data: 'id', name: 'id' },
-        { data: 'customers_id', name: 'customers_id', searchable: false  },
         { data: 'register', name: 'register' },
-        { data: 'memo', name: 'memo' },
-        { data: 'account', name: 'account', searchable: false },
-        { data: 'actions', name: '{{ trans('global.actions') }}' }
+        { data: 'name', name: 'name', searchable: false  },
+        { data: 'debit', name: 'debit', searchable: false },
+        { data: 'credit', name: 'credit', searchable: false }
     ],
     pageLength: 100,
     "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+    "footerCallback": function ( row, data, start, end, display ) {
+            var api = this.api(), data;
+ 
+            // converting to interger to find total
+            var intVal = function ( i ) {
+                return typeof i === 'string' ?
+                    i.replace(/[\$,]/g, '')*1 :
+                    typeof i === 'number' ?
+                        i : 0;
+            };
+ 
+            // computing column Debit of the complete result 
+            var Debit = api
+                .column( 4 )
+                .data()
+                .reduce( function (a, b) {
+                    return intVal(a) + intVal(b);
+                }, 0 );
+            // computing column Credit of the complete result 
+            var Credit = api
+                .column( 5 )
+                .data()
+                .reduce( function (a, b) {
+                    return intVal(a) + intVal(b);
+                }, 0 );
+				
+	    // Update footer by showing the total with the reference of the column index 
+	    $( api.column( 3 ).footer() ).html('Total');
+        $( api.column( 4 ).footer() ).html(Debit.toLocaleString("en-GB"));
+        $( api.column( 5 ).footer() ).html(Credit.toLocaleString("en-GB"));
+        },
   };
 
-  $('.datatable-ledger').DataTable(dtOverrideGlobals);
+  $('.datatable-orderproduct').DataTable(dtOverrideGlobals);
     $('a[data-toggle="tab"]').on('shown.bs.tab', function(e){
         $($.fn.dataTable.tables(true)).DataTable()
             .columns.adjust();

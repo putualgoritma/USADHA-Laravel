@@ -172,6 +172,7 @@ class StatistikController extends Controller
                         ->orWhere('orders.type', 'activation_agent');
                 })
                 ->where('orders.status', 'approved')
+                ->where('product_order_details.type', 'C')
                 ->groupBy('product_order_details.products_id')
                 ->orderBy('total', 'desc')
             // ->take(10)
@@ -211,6 +212,7 @@ class StatistikController extends Controller
                         ->orWhere('orders.type', 'activation_agent');
                 })
                 ->where('orders.status', 'approved')
+                ->where('product_order_details.type', 'C')
                 ->groupBy('product_order_details.products_id')
             // ->take(10)
                 ->get();

@@ -49,19 +49,20 @@ class MembersController extends Controller
     {
         abort_unless(\Gate::allows('member_access'), 403);
 
-        $from = !empty($request->from) ? $request->from : date('Y-m-01'); 
+        //$from = !empty($request->from) ? $request->from : date('Y-m-01'); 
+        $from = !empty($request->from) ? $request->from : '';
         $to = !empty($request->to) ? $request->to :date('Y-m-d'); 
 
 
         if ($request->ajax()) {
             $query = Member::selectRaw("customers.*,(SUM(CASE WHEN order_points.type = 'D' AND order_points.status = 'onhand' AND order_points.points_id = '1' THEN order_points.amount ELSE 0 END) - SUM(CASE WHEN order_points.type = 'C' AND order_points.status = 'onhand' AND order_points.points_id = '1' THEN order_points.amount ELSE 0 END)) AS amount_balance")
-                ->whereBetween('customers.register', [$from, $to])
+                ->whereBetween('customers.activation_at', [$from, $to])
                 ->leftJoin('order_points', 'order_points.customers_id', '=', 'customers.id')
                 ->where(function ($qry) {
                     $qry->where('customers.type', '=', 'member')
                         ->orWhere('customers.def', '=', '1');
                 })
-                ->orderBy("customers.register", "DESC")
+                ->orderBy("customers.activation_at", "DESC")
                 ->groupBy('customers.id')
                 ->FilterInput()
                 ->get();
@@ -97,7 +98,7 @@ class MembersController extends Controller
             });
 
             $table->editColumn('register', function ($row) {
-                return $row->register ? $row->register : "";
+                return $row->activation_at ? $row->activation_at : "";
             });
 
             $table->editColumn('name', function ($row) {
@@ -160,7 +161,7 @@ class MembersController extends Controller
         $members = Member::selectRaw("customers.*,(SUM(CASE WHEN order_points.type = 'D' AND order_points.status = 'onhand' AND order_points.points_id = '1' THEN order_points.amount ELSE 0 END) - SUM(CASE WHEN order_points.type = 'C' AND order_points.status = 'onhand' AND order_points.points_id = '1' THEN order_points.amount ELSE 0 END)) AS amount_balance")
             ->leftJoin('order_points', 'order_points.customers_id', '=', 'customers.id')
             ->where('customers.type', '=', 'member')
-            ->orderBy('customers.register')
+            ->orderBy('customers.activation_at')
             ->groupBy('customers.id')
             ->get();
 
@@ -339,7 +340,9 @@ class MembersController extends Controller
                 $order->points()->detach();
                 $order->delete();
             }
-            $member->delete();
+            // $member->delete();
+            $member->status = 'closed';
+            $member->save();
         } else {
             return back()->withError('Gagal Delete, Member Active!');
         }

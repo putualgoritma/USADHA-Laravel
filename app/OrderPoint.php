@@ -42,7 +42,7 @@ class OrderPoint extends Model
         if(request()->input('customer')!=""){
             $customer = request()->input('customer'); 
 
-            return $query->where('customers_id', $customer);
+            return $query->where('order_points.customers_id', $customer);
         }else{
             return ;
         }

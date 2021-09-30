@@ -2,13 +2,87 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Ledger;
 use App\Account;
 use App\Http\Controllers\Controller;
+use App\Ledger;
 use DB;
+use Illuminate\Http\Request;
+use Yajra\DataTables\Facades\DataTables;
 
 class AccbalanceController extends Controller
 {
+    public function accMutation(Request $request)
+    {
+        abort_unless(\Gate::allows('accbalance_access'), 403);
+
+        $id = !empty($request->account) ? $request->account : 0;
+        $from = !empty($request->from) ? $request->from : '';
+        $to = !empty($request->to) ? $request->to : date('Y-m-d');
+        if ($request->ajax()) {
+
+            if($id>0){
+            $query = Ledger::selectRaw("ledgers.register,ledgers.memo,ledger_entries.entry_type,ledger_entries.amount,accounts.name")
+                ->rightjoin('ledger_entries', 'ledgers.id', '=', 'ledger_entries.ledgers_id')
+                ->join('accounts', 'accounts.id', '=', 'ledger_entries.accounts_id')
+                ->where('ledgers.status', '=', 'approved')
+                ->where('ledger_entries.accounts_id', '=', $id)
+                ->whereBetween('ledgers.register', [$from, $to])
+                ->orderBy("ledgers.register", "asc");
+            }else{
+            $query = Ledger::selectRaw("ledgers.register,ledgers.memo,ledger_entries.entry_type,ledger_entries.amount,accounts.name")
+                ->rightjoin('ledger_entries', 'ledgers.id', '=', 'ledger_entries.ledgers_id')
+                ->join('accounts', 'accounts.id', '=', 'ledger_entries.accounts_id')
+                ->where('ledgers.status', '=', 'approved')
+                ->whereBetween('ledgers.register', [$from, $to])
+                ->orderBy("ledgers.register", "asc");
+            }
+            $table = Datatables::of($query);
+
+            $table->addColumn('placeholder', '&nbsp;');
+            $table->addColumn('actions', '&nbsp;');
+
+            $table->editColumn('register', function ($row) {
+                return $row->register ? $row->register : "";
+            });
+
+            $table->editColumn('name', function ($row) {
+                return $row->name ? $row->name : "";
+            });
+
+            $table->editColumn('memo', function ($row) {
+                return $row->memo ? $row->memo : "";
+            });
+
+            $table->editColumn('debit', function ($row) {
+                return $row->entry_type == 'D' ? $row->amount : 0;
+            });
+
+            $table->editColumn('credit', function ($row) {
+                return $row->entry_type == 'C' ? $row->amount : 0;
+            });
+
+            $table->editColumn('balance', function ($row) {
+                return '-';
+            });
+
+            $table->rawColumns(['placeholder']);
+
+            $table->addIndexColumn();
+            return $table->make(true);
+        }
+        //def view
+        $accounts = Account::orderBy("accounts_group_id", "ASC")->orderBy('code', 'ASC')->get();
+        $ledger_entries = Ledger::selectRaw("ledgers.register,ledgers.memo,ledger_entries.entry_type,ledger_entries.amount,accounts.name")
+            ->rightjoin('ledger_entries', 'ledgers.id', '=', 'ledger_entries.ledgers_id')
+            ->join('accounts', 'accounts.id', '=', 'ledger_entries.accounts_id')
+            ->where('ledgers.status', '=', 'approved')
+            ->where('ledger_entries.accounts_id', '=', $id)
+            ->whereBetween('ledgers.register', [$from, $to])
+            ->orderBy("ledgers.register", "asc");
+
+        return view('admin.accounts.mutation', compact('ledger_entries','accounts'));
+    }
+
     public function mutation($id)
     {
         abort_unless(\Gate::allows('accbalance_access'), 403);
@@ -33,6 +107,8 @@ class AccbalanceController extends Controller
             ->leftJoin('ledger_entries', 'ledger_entries.accounts_id', '=', 'accounts.id')
             ->leftjoin('ledgers', 'ledgers.id', '=', 'ledger_entries.ledgers_id')
             ->where('ledgers.status', '=', 'approved')
+            ->orderBy("accounts.accounts_group_id", "ASC")
+            ->orderBy('accounts.code', 'ASC')
             ->groupBy('accounts.id')
             ->get();
         //return $accounts;
@@ -99,7 +175,7 @@ class AccbalanceController extends Controller
             ->groupBy('accounts.id')
             ->get();
 
-        return view('admin.accounts.balancetrial', compact('accounts_assets', 'accounts_liabilities', 'accounts_equity','accounts_revenues','accounts_expenses'));
+        return view('admin.accounts.balancetrial', compact('accounts_assets', 'accounts_liabilities', 'accounts_equity', 'accounts_revenues', 'accounts_expenses'));
     }
 
     public function profitLoss()
@@ -128,6 +204,6 @@ class AccbalanceController extends Controller
             ->groupBy('accounts.id')
             ->get();
 
-        return view('admin.accounts.profitloss', compact('accounts_revenues','accounts_expenses'));
+        return view('admin.accounts.profitloss', compact('accounts_revenues', 'accounts_expenses'));
     }
 }

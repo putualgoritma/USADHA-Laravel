@@ -2,31 +2,31 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Customer;
+use App\Http\Controllers\Controller;
 use App\OrderPoint;
 use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
 use Yajra\DataTables\Facades\DataTables;
-use App\Customer;
 
 class OrderpointsController extends Controller
 {
     public function index(Request $request)
     {
         abort_unless(\Gate::allows('orderpoint_access'), 403);
-        $from = !empty($request->from) ? $request->from : date('Y-m-01'); 
-        $to = !empty($request->to) ? $request->to :date('Y-m-d'); 
+        //$from = !empty($request->from) ? $request->from : date('Y-m-01');
+        $from = !empty($request->from) ? $request->from : '';
+        $to = !empty($request->to) ? $request->to : date('Y-m-d');
 
         // dd('halo', $from .' '. $to);
         if ($request->ajax()) {
             $query = OrderPoint::selectRaw('order_points.*')->join('orders', 'order_points.orders_id', '=', 'orders.id')
                 ->whereBetween('orders.created_at', [$from, $to])
-                // ->with('orders')
+            // ->with('orders')
                 ->with('customers')
                 ->where('order_points.status', 'onhand')
-                ->FilterInput()
-                ->orderBy('order_points.id','DESC');
+                ->FilterInputJoin()
+                ->orderBy('order_points.id', 'DESC');
 
-            
             $table = Datatables::of($query);
 
             $table->addColumn('placeholder', '&nbsp;');
@@ -40,23 +40,23 @@ class OrderpointsController extends Controller
             });
 
             $table->editColumn('name', function ($row) {
-                return $row->customers->name ? $row->customers->code." - ".$row->customers->name : "";
-            });            
+                return $row->customers->name ? $row->customers->code . " - " . $row->customers->name : "";
+            });
 
             $table->editColumn('debit', function ($row) {
-                if($row->type === 'D'){
-                return $row->amount ? number_format($row->amount, 2) : "";
+                if ($row->type === 'D') {
+                    return $row->amount ? number_format($row->amount, 2) : "";
                 }
             });
 
             $table->editColumn('credit', function ($row) {
-                if($row->type === 'C'){
+                if ($row->type === 'C') {
                     return $row->amount ? number_format($row->amount, 2) : "";
-                    }
+                }
             });
 
             $table->editColumn('balance', function ($row) {
-                return ;
+                return;
             });
 
             $table->rawColumns(['placeholder']);
@@ -65,10 +65,13 @@ class OrderpointsController extends Controller
             return $table->make(true);
         }
         // //def view
-        $orderpoints = OrderPoint::with('orders')
+        $orderpoints = OrderPoint::selectRaw('order_points.*')->join('orders', 'order_points.orders_id', '=', 'orders.id')
+            ->whereBetween('orders.created_at', [$from, $to])
+        // ->with('orders')
             ->with('customers')
-            ->where('status', 'onhand')
-            ->orderBy('id','DESC');
+            ->where('order_points.status', 'onhand')
+            ->FilterInputJoin()
+            ->orderBy('order_points.id', 'DESC');
 
         $customers = Customer::select('*')
             ->where(function ($query) {
@@ -78,6 +81,6 @@ class OrderpointsController extends Controller
             })
             ->get();
 
-        return view('admin.orderpoints.index', compact('orderpoints', 'customers'));        
-    }    
+        return view('admin.orderpoints.index', compact('orderpoints', 'customers'));
+    }
 }

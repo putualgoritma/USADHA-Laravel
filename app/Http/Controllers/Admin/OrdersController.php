@@ -81,7 +81,8 @@ class OrdersController extends Controller
     {
         abort_if(Gate::denies('order_access'), Response::HTTP_FORBIDDEN, '403 Forbidden');
 
-        $from = !empty($request->from) ? $request->from : date('Y-m-01'); 
+        //$from = !empty($request->from) ? $request->from : date('Y-m-01'); 
+        $from = !empty($request->from) ? $request->from : '';
         $to = !empty($request->to) ? $request->to :date('Y-m-d'); 
         // dd($request->all());
         if ($request->ajax()) {

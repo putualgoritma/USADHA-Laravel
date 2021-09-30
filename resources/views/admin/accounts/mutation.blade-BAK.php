@@ -2,7 +2,7 @@
 @section('content')
 <div class="card">
     <div class="card-header">
-        {{ trans('global.account.balance') }}
+        {{ trans('global.account.mutation') }}
     </div>
 
     <div class="card-body">
@@ -16,53 +16,59 @@
 
                         </th>
                         <th>
-                            {{ trans('global.account.fields.code') }}
+                            {{ trans('global.account.fields.register') }}
                         </th>
                         <th>
-                            {{ trans('global.account.fields.name') }}
+                            {{ trans('global.account.fields.accounts_id') }}
                         </th>
                         <th>
-                            Saldo Debit (D)
+                            {{ trans('global.account.fields.memo') }}
                         </th>
                         <th>
-                            Saldo Credit (C)
+                            Debit (D)
+                        </th>
+                        <th>
+                            Credit (C)
                         </th>
                         <th>
                             Saldo
                         </th>
-                        <th>
-                            
-                        </th>
                     </tr>
-                    @foreach ($accounts as $id => $account)
+                    @php
+                    $saldo = 0;
+                    @endphp
+                    @foreach ($ledger_entries as $id => $entry)
                     <tr>
                         <td>
 
                         </td>
                         <td>
-                            {{ $account->code }}
+                            {{ $entry->register }}
                         </td>
                         <td>
-                            {{ $account->name }}
+                            {{ $entry->name }}
                         </td>
                         <td>
-                            {{ number_format($account->amount_debit, 2) }}
+                            {{ $entry->memo }}
                         </td>
                         <td>
-                            {{ number_format($account->amount_credit, 2) }}
+                        @if($entry->entry_type=='D')
+                            {{ number_format($entry->amount, 2) }}
+                            @php
+                            $saldo = $saldo+$entry->amount;
+                            @endphp
+                        @endif
                         </td>
                         <td>
-                        @php
-                            $saldo = $account->amount_debit-$account->amount_credit;
-                        @endphp
+                        @if($entry->entry_type=='C')
+                            {{ number_format($entry->amount, 2) }}
+                            @php
+                            $saldo = $saldo-$entry->amount;
+                            @endphp
+                        @endif
+                        </td>
+                        <td>
                             {{ number_format($saldo, 2) }}
-                        </td>
-                        <td>
-                        @can('account_show')
-                                    <a class="btn btn-xs btn-primary" href="{{ route('admin.acc-mutation', ['account' => $account->id,'from' => '', 'to' => '']) }}">
-                                    {{ trans('global.account.mutation') }}
-                                    </a>
-                                @endcan
                         </td>
                     </tr>
                     @endforeach

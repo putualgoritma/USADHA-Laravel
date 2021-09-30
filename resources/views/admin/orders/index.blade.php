@@ -35,6 +35,7 @@
                                 <select id="type" name="type" class="form-control">
                                 <option value="">== Semua Type ==</option>
                                 <option value="activation_member">Aktivasi Member</option>
+                                <option value="activation_agent">Aktivasi Agent</option>
                                 <option value="sale">Penjualan</option>
                                 <option value="sale_retur">Retur Penjualan</option>
                                 <option value="topup">Topup</option>
@@ -44,7 +45,8 @@
                                 <option value="production">Produksi</option>                    
                                 <option value="buy">Pembelian</option>                    
                                 <option value="buy_retur">Retur Pembelian</option>
-                                <option value="stock_trsf">Transfer Stok</option>                    
+                                <option value="stock_trsf">Transfer Stok</option>
+                                <option value="point_conversion">Konversi Poin</option>                    
                                 </select>
                             </div>                
                         </div>
@@ -55,7 +57,7 @@
                                     <div class="input-group-addon">
                                         <span class="glyphicon glyphicon-th"></span>
                                     </div>
-                                    <input id="from" placeholder="masukkan tanggal Awal" type="date" class="form-control datepicker" name="from" value = "{{date('Y-m-01')}}">
+                                    <input id="from" placeholder="masukkan tanggal Awal" type="date" class="form-control datepicker" name="from" value = "">
                                 </div>
                             </div>
                             <div class="form-group">

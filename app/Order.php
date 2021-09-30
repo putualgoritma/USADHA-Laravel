@@ -113,6 +113,26 @@ class Order extends Model
         }
     }
 
+    public function scopeFilterProductJoin($query)
+    {
+        if(!empty(request()->input('product'))){
+            $product = request()->input('product'); 
+            return $query->where('product_order_details.products_id', $product);
+        }else{
+            return ;
+        }
+    }
+
+    public function scopeFilterPackageJoin($query)
+    {
+        if(!empty(request()->input('product'))){
+            $product = request()->input('product'); 
+            return $query->where('order_product.product_id', $product);
+        }else{
+            return ;
+        }
+    }
+
     public function accounts()
     {
         return $this->belongsTo(Account::class, 'acc_pay')->select('id', 'code', 'name');

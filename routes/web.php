@@ -34,6 +34,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'namespace' => 'Admin', 'mi
     Route::get('balance-trial', 'AccbalanceController@trial')->name('balancetrial');
     Route::get('profit-loss', 'AccbalanceController@profitLoss')->name('profitloss');
     Route::get('accmutation/{id}', 'AccbalanceController@mutation')->name('accmutation');
+    Route::get('acc-mutation', 'AccbalanceController@accMutation')->name('acc-mutation');
 
     Route::delete('cogsallocats/destroy', 'CogsAllocatsController@massDestroy')->name('cogsallocats.massDestroy');
     Route::resource('cogsallocats', 'CogsAllocatsController');
@@ -144,6 +145,12 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'namespace' => 'Admin', 'mi
     Route::get('statistik', 'StatistikController@index')->name('statistik.index');
     Route::get('statistik/product', 'StatistikController@product')->name('statistik.product');
     Route::get('statistik/member', 'StatistikController@member')->name('statistik.member');
+
+    //order product
+    Route::resource('order-product', 'OrderProductsController');
+
+    //order package
+    Route::resource('order-package', 'OrderPackagesController');
 
 });
 
