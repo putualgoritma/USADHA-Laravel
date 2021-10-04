@@ -96,7 +96,7 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'namespace' => 'Admin', 'mi
     Route::put('withdraw-approvedprocess', 'WithdrawController@approvedprocess')->name('withdraw.approvedprocess');
 
     //test
-    Route::get('test', 'OrdersController@test')->name('orders.test');
+    Route::get('test', 'TestController@test')->name('test.test');
     Route::get('sms-api', 'OrdersController@smsApi');
 
     // Sale Retur
