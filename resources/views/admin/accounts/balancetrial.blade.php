@@ -135,12 +135,12 @@
                         </th>
                     </tr>
                     @php
-                    $total = 0;
+                    $total_liabilities = 0;
                     @endphp
                     @foreach ($accounts_liabilities as $id => $account)
                     @php
                     $amount = $account->amount_credit - $account->amount_debit;
-                    $total = $total + $amount;
+                    $total_liabilities = $total_liabilities + $amount;
                     @endphp
                     <tr>
                         <td>
@@ -168,7 +168,7 @@
                             Total Utang
                         </th>
                         <th>
-                        {{ number_format($total, 2) }}
+                        {{ number_format($total_liabilities, 2) }}
                         </th>
                     </tr>
                     <tr>
@@ -200,12 +200,12 @@
                         </th>
                     </tr>
                     @php
-                    $total = 0;
+                    $total_equity = 0;
                     @endphp
                     @foreach ($accounts_equity as $id => $account)
                     @php
                     $amount = $account->amount_credit - $account->amount_debit;
-                    $total = $total + $amount;
+                    $total_equity = $total_equity + $amount;
                     @endphp
                     <tr>
                         <td>
@@ -233,7 +233,7 @@
                             Total Modal
                         </th>
                         <th>
-                        {{ number_format($total, 2) }}
+                        {{ number_format($total_equity, 2) }}
                         </th>
                     </tr>
                     <tr>
@@ -281,7 +281,7 @@
                     @endphp     
                     @endforeach 
                     @php
-                    $total = $total_revenue-$total_expense;
+                    $total_shu = $total_revenue-$total_expense;
                     @endphp             
                     <tr>
                         <th width="10">
@@ -294,9 +294,43 @@
                             Total Laba
                         </th>
                         <th>
-                        {{ number_format($total, 2) }}
+                        {{ number_format($total_shu, 2) }}
                         </th>
                     </tr>
+
+
+                    <tr>
+                        <th width="10">
+
+                        </th>
+                        <th>
+                            
+                        </th>
+                        <th>
+                            
+                        </th>
+                        <th>
+                            
+                        </th>
+                    </tr>                    
+                    @php
+                    $total_passiva = $total_shu+$total_equity+$total_liabilities;
+                    @endphp             
+                    <tr>
+                        <th width="10">
+
+                        </th>
+                        <th>
+                            
+                        </th>
+                        <th>
+                            Total Passiva
+                        </th>
+                        <th>
+                        {{ number_format($total_passiva, 2) }}
+                        </th>
+                    </tr>
+
                 </thead>                
             </table>
         </div>

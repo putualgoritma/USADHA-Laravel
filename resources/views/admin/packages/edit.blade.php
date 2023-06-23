@@ -138,6 +138,19 @@
                 </p>
             </div>
 
+            <div class="form-group {{ $errors->has('bv') ? 'has-error' : '' }}">
+                <label for="bv">{{ trans('global.package.fields.bv') }}</label>
+                <input type="number" id="bv" name="bv" class="form-control" value="{{ old('bv', isset($package) ? $package->bv : '') }}" step="0.01">
+                @if($errors->has('bv'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('bv') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.package.fields.bv_helper') }}
+                </p>
+            </div>
+
             <div class="form-group {{ $errors->has('status') ? 'has-error' : '' }}">
                 <label for="status">{{ trans('global.package.fields.status') }}*</label>
                 <select name="status" class="form-control">

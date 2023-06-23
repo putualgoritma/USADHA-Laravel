@@ -212,6 +212,11 @@ Route::group(['prefix' => 'admin', 'as' => 'admin.', 'namespace' => 'Admin', 'mi
     Route::get('career-member', 'CareersController@showMember')->name('careers.showMember');
     Route::get('career-member-list', 'CareersController@listMember')->name('careers.listMember');
 
+    //pairing tunggu
+    Route::get('pairing-pending', 'MembersController@pairingPending')->name('members.pairingPending');
+    Route::get('pairing-convert', 'MembersController@pairingConvert')->name('members.pairingConvert');
+    Route::put('pairing-convert-process', 'MembersController@pairingConvertProcess')->name('members.pairingConvertProcess');
+
 });
 
 Route::group(['prefix' => 'admin', 'as' => 'midtrans.', 'namespace' => 'Admin'], function () {

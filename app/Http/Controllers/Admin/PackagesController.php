@@ -126,7 +126,7 @@ class PackagesController extends Controller
             $cogs_total += $quantities[$product] * $product_row->cogs;   
             $bv += $quantities[$product] * $product_row->bv;          
         }
-        $data=array_merge($request->all(), ['type' => 'package','cogs' => $cogs_total,'bv' => $bv]);
+        $data=array_merge($request->all(), ['type' => 'package','cogs' => $cogs_total]);
         $package=Package::create($data);
         
         //store to package_product
@@ -165,7 +165,7 @@ class PackagesController extends Controller
             $cogs_total += $quantities[$product] * $product_row->cogs;
             $bv += $quantities[$product] * $product_row->bv;            
         }
-        $data=array_merge($request->all(), ['type' => 'package','cogs' => $cogs_total,'bv' => $bv]);
+        $data=array_merge($request->all(), ['type' => 'package','cogs' => $cogs_total]);
         
         $img_path="/images/products";
         $basepath=str_replace("laravel-admin","public_html/admin",\base_path());

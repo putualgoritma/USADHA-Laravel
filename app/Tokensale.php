@@ -25,11 +25,17 @@ class Tokensale extends Model
         'activation_type_id',
         'old_activation_type_id',
         'memo',
+        'total',
     ];
 
     public function customers()
     {
         return $this->belongsTo(Customer::class, 'customer_id')->select('id', 'code', 'name');
+    }
+
+    public function agents()
+    {
+        return $this->belongsTo(Customer::class, 'agent_id');
     }
 
     public function products()

@@ -19,6 +19,35 @@ class TokensalesApiController extends Controller
         $this->onesignal_client = new OneSignalClient(env('ONESIGNAL_APP_ID_MEMBER'), env('ONESIGNAL_REST_API_KEY_MEMBER'), '');
     }
 
+    public function validToken(Request $request)
+    {
+        $tokensales = Tokensale::with('products')
+                ->with('agents')        
+                ->where('code', $request->token)
+                ->where('status', '=', 'active')
+                ->where('type', $request->type)
+                ->orderBy('id', 'DESC')
+                ->first();
+
+        //Check if token found or not.
+        if (is_null($tokensales)) {
+            $message = 'Tokensale not found.';
+            $status = false;
+            return response()->json([
+                'status' => $status,
+                'message' => $message,
+            ]);
+        } else {
+            $message = 'Tokensale retrieved successfully.';
+            $status = true;
+            return response()->json([
+                'status' => $status,
+                'message' => $message,
+                'data' => $tokensales,
+            ]);
+        }
+    }
+
     public function historyToken($id, Request $request)
     {
         // return $request;
@@ -62,10 +91,15 @@ class TokensalesApiController extends Controller
         $package = json_decode($data, false);
         $cart_arr = $package->cart;
         $count_cart = count($cart_arr);
+        //get total
+        $total = 0;
+        for ($i = 0; $i < $count_cart; $i++) {
+            $total += $cart_arr[$i]->quantity * $cart_arr[$i]->price;
+        }
 
         //generate token
         $code = $this->gen_token();
-        $data = array('agent_id' => $package->agent_id, 'customer_id' => $package->customer_id, 'code' => $code, 'type' => $package->type, 'activation_type_id' => $package->activation_type_id, 'old_activation_type_id' => $package->old_activation_type_id, 'memo' => $package->memo);
+        $data = array('agent_id' => $package->agent_id, 'customer_id' => $package->customer_id, 'code' => $code, 'type' => $package->type, 'activation_type_id' => $package->activation_type_id, 'old_activation_type_id' => $package->old_activation_type_id, 'memo' => $package->memo, 'total' => $total);
         $tokensale = Tokensale::create($data);
         for ($i = 0; $i < $count_cart; $i++) {
             //insert into tokensale_product

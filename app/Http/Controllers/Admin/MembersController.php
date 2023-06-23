@@ -14,11 +14,12 @@ use App\Http\Requests\UpdateMemberRequest;
 use App\Ledger;
 use App\LogNotif;
 use App\Member;
+use App\NetworkFee;
 use App\Order;
 use App\OrderDetails;
 use App\OrderPoint;
 use App\Package;
-use App\Pairing;
+use App\Point;
 use App\Product;
 use App\Traits\TraitModel;
 use Berkayk\OneSignal\OneSignalClient;
@@ -39,6 +40,194 @@ class MembersController extends Controller
     public function __construct()
     {
         $this->onesignal_client = new OneSignalClient(env('ONESIGNAL_APP_ID_MEMBER'), env('ONESIGNAL_REST_API_KEY_MEMBER'), '');
+    }
+
+    public function pairingConvert(Request $request)
+    {
+        abort_unless(\Gate::allows('member_create'), 403);
+
+        $member = Member::find($request->member_id);
+        $points = Point::where('id', 6)
+            ->get();
+        //BVPO
+        $bvpo_row = NetworkFee::select('*')
+            ->Where('code', '=', 'BVPO')
+            ->get();
+        $bvpo = $bvpo_row[0]->amount;
+        $member->l_balance = $request->l_balance / $bvpo;
+        $member->r_balance = $request->r_balance / $bvpo;
+        $member->balance = $request->l_balance / $bvpo + $request->r_balance / $bvpo;
+
+        return view('admin.members.pairingconvert', compact('member', 'points'));
+    }
+
+    public function pairingConvertProcess(Request $request)
+    {
+        abort_unless(\Gate::allows('member_create'), 403);
+
+        //set code
+        $last_code = $this->get_last_code('bv_pairing_conv');
+        $code = acc_code_generate($last_code, 8, 3);
+        $register = date("Y-m-d");
+
+        //get member
+        $member = Member::find($request->input('member_id'));
+
+        // kalkulasi bv konversi
+        $bv_conv = ($request->input('percent') / 100) * $request->input('balance');
+        //BVPO
+        $bvpo_row = NetworkFee::select('*')
+            ->Where('code', '=', 'BVPO')
+            ->get();
+        $bvpo = $bvpo_row[0]->amount;
+        $bv_amount = $request->input('balance') * $bvpo;
+        $bv_conv_amount = $bv_conv * $bvpo;
+        $bv_l_adjust = ($request->input('balance') - $request->input('l_balance')) * $bvpo;
+        $bv_r_adjust = ($request->input('balance') - $request->input('r_balance')) * $bvpo;
+        
+        // buat trs orders type bv_pairing_conv
+        $memo = 'Konversi BV Pairing Tunggu '.$member->code." - ".$member->name;
+        $data = ['code' => $code, 'memo' => $memo, 'total' => $bv_conv_amount, 'type' => 'bv_pairing_conv', 'status' => 'approved', 'status_delivery' => 'received', 'ledgers_id' => 0, 'customers_id' => $request->input('member_id'), 'payment_type' => 'point', 'bv_ro_amount' => 0, 'register' => $register];
+        $order = Order::create($data);
+        
+        // buat order_point
+        $order->points()->attach($request->input('point'), ['amount' => $bv_conv_amount, 'type' => 'D', 'status' => 'onhand', 'customers_id' => $request->input('member_id')]);
+        
+        // buat jurnal
+        //  utang poin (C), cadangan komisi (D)
+        /* proceed ledger */
+        $data = ['register' => $register, 'title' => $memo, 'memo' => $memo];
+        $ledger = Ledger::create($data);
+        //set ledger entry arr
+        $acc_points = '67'; //utang poin
+        $acc_res_cashback = '70'; //cadangan komisi
+        $accounts = array($acc_points, $acc_res_cashback);
+        $amounts = array($bv_conv_amount, $bv_conv_amount);
+        $types = array('C', 'D');
+        //ledger entries
+        for ($account = 0; $account < count($accounts); $account++) {
+            if ($accounts[$account] != '') {
+                $ledger->accounts()->attach($accounts[$account], ['entry_type' => $types[$account], 'amount' => $amounts[$account]]);
+            }
+        }
+
+        // update jurnal to order
+        $order->ledgers_id = $ledger->id;
+        $order->save();
+
+        //create bv_pairing_queue bv tunggu total type L D
+        $data = ['order_id' => $order->id, 'customer_id' => $request->input('member_id'), 'bv_amount' => $bv_l_adjust, 'position' => 'L', 'status' => 'active', 'type' => 'D'];
+        $queue_crt = BVPairingQueue::create($data);
+        //create bv_pairing_queue bv tunggu total type R D
+        $data = ['order_id' => $order->id, 'customer_id' => $request->input('member_id'), 'bv_amount' => $bv_r_adjust, 'position' => 'R', 'status' => 'active', 'type' => 'D'];
+        $queue_crt = BVPairingQueue::create($data);
+        // create bv_pairing_queue bv tunggu total type C
+        $data = ['order_id' => $order->id, 'customer_id' => $request->input('member_id'), 'bv_amount' => $bv_amount, 'position' => 'N', 'status' => 'active', 'type' => 'C', 'pairing_amount' => $bv_conv_amount];
+        $queue_crt = BVPairingQueue::create($data);
+
+        //return
+        return redirect()->route('admin.members.pairingPending');
+    }
+
+    public function pairingPending(Request $request)
+    {
+        abort_unless(\Gate::allows('member_access'), 403);
+
+        //$from = !empty($request->from) ? $request->from : date('Y-m-01');
+        $from = !empty($request->from) ? $request->from : '';
+        $to = !empty($request->to) ? $request->to : date('Y-m-d');
+
+        //BVPO
+        $bvpo_row = NetworkFee::select('*')
+            ->Where('code', '=', 'BVPO')
+            ->get();
+        $bvpo = $bvpo_row[0]->amount;
+
+        if ($request->ajax()) {
+            $query = Member::selectRaw("customers.*,(SUM(CASE WHEN bv_pairing_queue.position = 'L' AND bv_pairing_queue.status = 'active' AND bv_pairing_queue.type = 'D' THEN bv_pairing_queue.bv_amount ELSE 0 END) - SUM(CASE WHEN bv_pairing_queue.status = 'active' AND bv_pairing_queue.type = 'C' THEN bv_pairing_queue.bv_amount ELSE 0 END)) AS l_balance,(SUM(CASE WHEN bv_pairing_queue.position = 'R' AND bv_pairing_queue.status = 'active' AND bv_pairing_queue.type = 'D' THEN bv_pairing_queue.bv_amount ELSE 0 END) - SUM(CASE WHEN bv_pairing_queue.status = 'active' AND bv_pairing_queue.type = 'C' THEN bv_pairing_queue.bv_amount ELSE 0 END)) AS r_balance")
+                ->whereBetween(DB::raw('DATE(customers.created_at)'), [$from, $to])
+                ->leftJoin('bv_pairing_queue', 'bv_pairing_queue.customer_id', '=', 'customers.id')
+                ->where(function ($qry) {
+                    $qry->where('customers.type', '=', 'member')
+                        ->orWhere('customers.def', '=', '1');
+                })
+                ->orderBy("customers.activation_at", "DESC")
+                ->groupBy('bv_pairing_queue.customer_id')
+                ->FilterInput()
+                ->get();
+
+            $table = Datatables::of($query);
+
+            $table->addColumn('placeholder', '&nbsp;');
+            $table->addColumn('actions', '&nbsp;');
+
+            $table->editColumn('actions', function ($row) {
+                $viewGate = 'member_show';
+                $editGate = 'member_edit';
+                $deleteGate = 'member_delete';
+                $crudRoutePart = 'members';
+
+                return view('partials.datatablesPairingPending', compact(
+                    'viewGate',
+                    'editGate',
+                    'deleteGate',
+                    'crudRoutePart',
+                    'row'
+                ));
+            });
+
+            $table->editColumn('code', function ($row) {
+                return $row->code ? $row->code : "";
+            });
+
+            $table->editColumn('register', function ($row) {
+                return $row->activation_at ? $row->activation_at : "";
+            });
+
+            $table->editColumn('name', function ($row) {
+                return $row->name ? $row->name : "";
+            });
+
+            $table->editColumn('email', function ($row) {
+                return $row->email ? $row->email : "";
+            });
+
+            $table->editColumn('phone', function ($row) {
+                return $row->phone ? $row->phone : "";
+            });
+
+            $table->editColumn('status', function ($row) {
+                return $row->status ? $row->status : "";
+            });
+
+            $table->editColumn('lsaldo', function ($row) use ($bvpo) {
+                return $row->l_balance ? $row->l_balance / $bvpo : 0;
+            });
+
+            $table->editColumn('rsaldo', function ($row) use ($bvpo) {
+                return $row->r_balance ? $row->r_balance / $bvpo : 0;
+            });
+
+            $table->rawColumns(['actions', 'placeholder']);
+
+            $table->addIndexColumn();
+
+            return $table->make(true);
+        }
+
+        $members = Member::selectRaw("customers.*,(SUM(CASE WHEN bv_pairing_queue.position = 'L' AND bv_pairing_queue.status = 'active' AND bv_pairing_queue.type = 'D' THEN bv_pairing_queue.bv_amount ELSE 0 END) - SUM(CASE WHEN bv_pairing_queue.status = 'active' AND bv_pairing_queue.type = 'C' THEN bv_pairing_queue.bv_amount ELSE 0 END)) AS l_balance,(SUM(CASE WHEN bv_pairing_queue.position = 'R' AND bv_pairing_queue.status = 'active' AND bv_pairing_queue.type = 'D' THEN bv_pairing_queue.bv_amount ELSE 0 END) - SUM(CASE WHEN bv_pairing_queue.status = 'active' AND bv_pairing_queue.type = 'C' THEN bv_pairing_queue.bv_amount ELSE 0 END)) AS r_balance")
+            ->whereBetween(DB::raw('DATE(customers.created_at)'), [$from, $to])
+            ->leftJoin('bv_pairing_queue', 'bv_pairing_queue.customer_id', '=', 'customers.id')
+            ->where(function ($qry) {
+                $qry->where('customers.type', '=', 'member')
+                    ->orWhere('customers.def', '=', '1');
+            })
+            ->orderBy("customers.activation_at", "DESC")
+            ->groupBy('bv_pairing_queue.customer_id')
+            ->FilterInput()
+            ->get();
+
+        return view('admin.members.pairingpending', compact('members'));
     }
 
     public function upgrade($id)
@@ -102,7 +291,7 @@ class MembersController extends Controller
                     ->where('status', '!=', 'closed')
                     ->where('ref_bin_id', '>', 0)
                     ->get();
-                if (count($member_3hus)==0) {
+                if (count($member_3hus) == 0) {
                     $order->status = 'closed';
                     $order->status_delivery = 'pending';
                     $order->save();
@@ -182,7 +371,7 @@ class MembersController extends Controller
                     return back()->withError($message)->withInput();
                 } else {
                     $member = Customer::find($request->id);
-                    $message = 'Pembatalan Aktivasi Member: ' . $member->code." - ".count($member_3hus) ." - ".$order_activation[0]->num_rows. " - ".$order_non_activation[0]->num_rows.  ' - ' . $member->name . ' Gagal Dibatalkan. Member Terkait Member Lain.';
+                    $message = 'Pembatalan Aktivasi Member: ' . $member->code . " - " . count($member_3hus) . " - " . $order_activation[0]->num_rows . " - " . $order_non_activation[0]->num_rows . ' - ' . $member->name . ' Gagal Dibatalkan. Member Terkait Member Lain.';
                     return redirect()->route('admin.members.index')->withError($message);
                     // return back()->withError($message)->withInput();
                 }} else {
@@ -528,7 +717,7 @@ class MembersController extends Controller
         $members['get_member_down1'] = $this->get_member_down($member->id, 1);
         $members['get_member_down2'] = $this->get_member_down($member->id, 2);
         $members['get_member_down3'] = $this->get_member_down($member->id, 3);
-        $members['get_member_down4'] = $this->get_member_down($member->id, 4);        
+        $members['get_member_down4'] = $this->get_member_down($member->id, 4);
 
         $careertypes = Careertype::with('careertypes')
             ->where('id', '>', $career_selected_id)

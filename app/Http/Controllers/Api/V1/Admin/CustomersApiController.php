@@ -19,6 +19,7 @@ use App\Package;
 use App\PairingInfo;
 use App\Product;
 use App\Province;
+use App\Tokensale;
 use App\Traits\TraitModel;
 use Auth;
 use Berkayk\OneSignal\OneSignalClient;
@@ -660,7 +661,7 @@ class CustomersApiController extends Controller
             ->where('type', 'agent')
             ->with(['provinces', 'city'])
             ->first();
-        if ((Hash::check(request('password'), $user->password)) && ($user->status_block == 0)) {
+        if ($user && ((Hash::check(request('password'), $user->password)) && ($user->status_block == 0))) {
             Auth::login($user);
             if (request('id_onesignal') != null) {
                 $user->id_onesignal = request('id_onesignal');
@@ -676,7 +677,7 @@ class CustomersApiController extends Controller
         } else {
             //if authentication is unsuccessfull, notice how I return json parameters
             $message = 'Email & Password yang Anda masukkan salah. Salah memasukkan Email & Password lebih dari 3x maka Account akan otomatis di blokir.';
-            if ($user->status_block == 1) {
+            if ($user && ($user->status_block == 1)) {
                 $message = 'Your Account is temporary blocked.';
             }
             return response()->json([
@@ -939,7 +940,30 @@ class CustomersApiController extends Controller
             $package_activation_type_id = $request->activationtype;
             $profit = $total - $cogs_total;
 
-            if ($points_balance >= $total) {
+            //get stock agent, loop package
+            $stock_status = 'true';
+            if ($request->tokensale != '') {
+                $cart_arr = $request->cart['item'];
+                $count_cart = count($cart_arr);
+                for ($i = 0; $i < $count_cart; $i++) {
+                    $stock_debit = OrderDetails::where('owner', '=',$request->input('agents_id'))
+                        ->where('type', '=', 'D')
+                        ->where('status', '=', 'onhand')
+                        ->where('products_id', $cart_arr[$i]['id'])
+                        ->sum('quantity');
+                    $stock_credit = OrderDetails::where('owner', '=',$request->input('agents_id'))
+                        ->where('type', '=', 'C')
+                        ->where('status', '=', 'onhand')
+                        ->where('products_id', $cart_arr[$i]['id'])
+                        ->sum('quantity');
+                    $stock_balance = $stock_debit - $stock_credit;
+                    if ($stock_balance < $cart_arr[$i]['qty']) {
+                        $stock_status = 'false';
+                    }
+                }
+            }
+
+            if (($points_balance >= $total || $request->tokensale != '') && $stock_status == 'true') {
                 $input = $request->all();
                 $last_code = $this->mbr_get_last_code();
                 $code = acc_code_generate($last_code, 8, 3);
@@ -1102,11 +1126,20 @@ class CustomersApiController extends Controller
                     $ref1_flush_out = 0;
                 }
 
+                $payment_type = 'point';
+                $status_delivery = 'received';
+                $status_order = 'pending';
+                if ($request->tokensale != '') {
+                    $payment_type = 'token';
+                    $status_delivery = 'delivered';
+                    $status_order = 'approved';
+                }
+
                 //set order
                 $warehouses_id = 1;
                 $last_code = $this->get_last_code('order-agent');
                 $order_code = acc_code_generate($last_code, 8, 3);
-                $data = array('memo' => $memo, 'total' => $total, 'type' => 'activation_member', 'status' => 'pending', 'ledgers_id' => $ledger_id, 'customers_id' => $sponsor_id, 'agents_id' => $request->input('agents_id'), 'payment_type' => 'point', 'code' => $order_code, 'register' => $register, 'bv_activation_amount' => $bv_nett, 'customers_activation_id' => $member->id, 'bv_total' => $bv_total);
+                $data = array('memo' => $memo, 'total' => $total, 'type' => 'activation_member', 'status' => $status_order, 'ledgers_id' => $ledger_id, 'customers_id' => $sponsor_id, 'agents_id' => $request->input('agents_id'), 'payment_type' => $payment_type, 'code' => $order_code, 'register' => $register, 'bv_activation_amount' => $bv_nett, 'customers_activation_id' => $member->id, 'bv_total' => $bv_total, 'token_no' => $request->tokensale, 'status_delivery' => $status_delivery);
                 $order = Order::create($data);
                 //set order products
                 for ($i = 0; $i < $count_cart; $i++) {
@@ -1165,7 +1198,9 @@ class CustomersApiController extends Controller
 
                 //set trf points from member to Usadha Bhakti (pending points)
                 $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Penambahan Poin dari (Pending Order) ' . $memo, 'customers_id' => $com_id]);
-                $order->points()->attach($points_id, ['amount' => $total, 'type' => 'C', 'status' => 'onhand', 'memo' => 'Pemotongan Poin dari ' . $memo, 'customers_id' => $sponsor_id]);
+                if ($request->tokensale == '') {
+                    $order->points()->attach($points_id, ['amount' => $total, 'type' => 'C', 'status' => 'onhand', 'memo' => 'Pemotongan Poin dari ' . $memo, 'customers_id' => $sponsor_id]);
+                }
 
                 //set trf points cashback agent
                 $order->points()->attach($points_id, ['amount' => $cba2, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin (Cashback Agen 02) dari ' . $memo, 'customers_id' => $agents_id]);
@@ -1173,8 +1208,22 @@ class CustomersApiController extends Controller
                 if ($cbmart > 0) {
                     $order->points()->attach($points_id, ['amount' => $cbmart, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin (Komisi Agen UBB Mart) dari ' . $memo, 'customers_id' => $agent_row->ref_id]);
                 }
+
                 //set trf points from member to agent (onhold)
-                $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin dari (Penjualan Paket) ' . $memo, 'customers_id' => $agents_id]);
+                if ($request->tokensale == '') {
+                    $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin dari (Penjualan Paket) ' . $memo, 'customers_id' => $agents_id]);
+                }
+
+                //if using token sale
+                if ($request->tokensale != '') {
+                    $tokensales = Tokensale::where('code', $request->tokensale)
+                        ->where('status', '=', 'active')
+                        ->orderBy('id', 'DESC')
+                        ->first();
+                    $tokensales->status = 'closed';
+                    $tokensales->save();
+                    $this->orderCompleted($order->id);
+                }
 
                 //push notif to agent
                 $user_os = CustomerApi::find($agents_id);
@@ -1215,7 +1264,7 @@ class CustomersApiController extends Controller
             } else {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Saldo Poin Member Tidak Mencukupi.'.$points_balance.'::'.$total,
+                    'message' => 'Saldo Poin Member Tidak Mencukupi atau Stok Agen tidak mencukupi.' . $points_balance . '::' . $total,
                 ], 401);
             }
         }
@@ -2345,7 +2394,7 @@ class CustomersApiController extends Controller
                 }
 
                 //compare total to point belanja
-                if ($points_balance >= $total && $member->status == 'pending') {                    
+                if ($points_balance >= $total && $member->status == 'pending') {
                     //init
                     $register = date("Y-m-d");
                     $memo = 'Aktivasi Member ' . $member->code . "-" . $member->name;
@@ -2501,7 +2550,7 @@ class CustomersApiController extends Controller
 
                     /*update member */
                     //check if slot is null
-                    if($member->slot_x<1){
+                    if ($member->slot_x < 1) {
                         //get auto slot
                         //get x & y referal
                         $reff_user = CustomerApi::where('id', $member->ref_bin_id)->first();
@@ -2509,7 +2558,7 @@ class CustomersApiController extends Controller
                         $get_slot_empty = $this->get_slot_empty($reff_user->slot_x, $reff_user->slot_y, 1, $slot_arr);
                         $member->slot_x = $get_slot_empty['ex'];
                         $member->slot_y = $get_slot_empty['ey'];
-                        }
+                    }
                     $parent_id = $this->set_parent($member->ref_id);
                     $activation_at = date('Y-m-d H:i:s');
                     $member->parent_id = $parent_id;

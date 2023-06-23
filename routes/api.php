@@ -82,6 +82,9 @@ Route::group(['prefix' => 'close', 'namespace' => 'Api\V1\Admin', 'middleware' =
     Route::post('/logs-unread', 'CustomersApiController@logsUnread');
     Route::get('logs-update-status/{id}', 'CustomersApiController@logsUpdate');
     Route::post('/upload-img/{id}', 'CustomersApiController@upImg');
+
+    
+    Route::get('/products-member-agent', 'ProductsApiController@indexMemberAgent');
     
     //tree
     Route::get('member-tree', 'CustomersApiController@downlineTree');
@@ -144,6 +147,7 @@ Route::group(['prefix' => 'close', 'namespace' => 'Api\V1\Admin', 'middleware' =
     //token sale
     Route::post('generate-token', 'TokensalesApiController@generateToken');
     Route::get('history-token/{id}', 'TokensalesApiController@historyToken');
+    Route::get('valid-token', 'TokensalesApiController@validToken');
 
     //test
     Route::get('test/{id}', 'OrdersApiController@test');

@@ -36,6 +36,8 @@ class Order extends Model
         'bv_total',
         'bv_automaintain_amount',
         'bv_reseller_amount',
+        'token_no',
+        'status_delivery',
     ];
 
     public function customers()

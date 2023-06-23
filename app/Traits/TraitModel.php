@@ -24,11 +24,147 @@ use App\Production;
 use DB;
 use Illuminate\Database\QueryException;
 use App\Tokensale;
+use App\PairingInfo;
+use App\LogNotif;
+use App\Member;
+use OneSignal;
 
 trait TraitModel
 {
     private $fee_pairing_amount = 5;
     private $id_order_priv = 0;
+
+    public function orderCompleted($id)
+    {
+        /*update order status */
+        $order = Order::find($id);
+        //check if activation member
+        if ($order->type == 'activation_member') {
+            $activation_member = Customer::find($order->customers_activation_id);
+            $activation_member->status = 'active';
+            $activation_member->save();
+        }
+        //if upgrade
+        if ($order->type == 'activation_member' && $order->activation_type_id_old > 0) {
+            $activation_member = Customer::find($order->customers_activation_id);
+            $activation_member->activation_type_id = $order->activation_type_id;
+            $activation_member->save();
+        }
+        if ($order->status == 'approved' && $order->status_delivery == 'delivered') {
+            //process pairing
+            $pairinginfo = PairingInfo::where('order_id', $order->id)->first();
+            if ($order->bv_automaintain_amount > 0) {
+                $this->fee_auto_maintain($pairinginfo->order_id, $pairinginfo->ref_id, $pairinginfo->bv_total, $pairinginfo->bvcv_amount, $pairinginfo->ref1_fee_point_sale, $pairinginfo->ref1_fee_point_upgrade, $pairinginfo->ref2_fee_point_sale, $pairinginfo->ref2_fee_point_upgrade, $pairinginfo->ref1_flush_out, $pairinginfo->ledger_id, $pairinginfo->cba2, $pairinginfo->cbmart, $pairinginfo->points_fee_id, $pairinginfo->points_upg_id, $pairinginfo->ref2_id, $pairinginfo->memo, $pairinginfo->member_get_flush_out, $pairinginfo->package_type, $pairinginfo->ref_fee_lev, $pairinginfo->customer_id);
+            } else if ($order->bv_reseller_amount > 0) {
+
+            } else {
+                $this->fee_pairing($pairinginfo->order_id, $pairinginfo->ref_id, $pairinginfo->bv_total, $pairinginfo->bvcv_amount, $pairinginfo->ref1_fee_point_sale, $pairinginfo->ref1_fee_point_upgrade, $pairinginfo->ref2_fee_point_sale, $pairinginfo->ref2_fee_point_upgrade, $pairinginfo->ref1_flush_out, $pairinginfo->ledger_id, $pairinginfo->cba2, $pairinginfo->cbmart, $pairinginfo->points_fee_id, $pairinginfo->points_upg_id, $pairinginfo->ref2_id, $pairinginfo->memo, $pairinginfo->member_get_flush_out, $pairinginfo->package_type, $pairinginfo->ref_fee_lev, $pairinginfo->customer_id);
+            }
+
+            //update order status
+            $order->status_delivery = 'received';
+            $order->save();
+            //set trf points from Usadha Bhakti to Agent
+            $com_row = Member::select('*')
+                ->where('def', '=', '1')
+                ->get();
+            $com_id = $com_row[0]->id;
+            $points_id = 1;
+            $points_id2 = 2;
+            $points_id3 = 3;
+            $points_id4 = 4;
+            $memo = $order->memo;
+            $total = $order->total;
+            $order->points()->attach($points_id, ['amount' => $total, 'type' => 'C', 'status' => 'onhand', 'memo' => 'Balik Poin dari ' . $memo, 'customers_id' => $com_id]);
+            //update pivot points
+            $orderpoints = OrderPoint::where('orders_id', $id)->get();
+            foreach ($orderpoints as $key => $orderpoint) {
+                $orderpoint_upd = OrderPoint::find($orderpoint->id);
+                $orderpoint_upd->status = 'onhand';
+                $orderpoint_upd->save();
+            }
+            //update pivot BVPairingQueue
+            $pairingqueues = BVPairingQueue::where('order_id', $id)->get();
+            foreach ($pairingqueues as $key => $pairingqueue) {
+                $pairingqueue_upd = BVPairingQueue::find($pairingqueue->id);
+                $pairingqueue_upd->status = 'active';
+                $pairingqueue_upd->save();
+            }
+
+            //update pivot products details
+            $ids = $order->productdetails()->allRelatedIds();
+            foreach ($ids as $products_id) {
+                $order->productdetails()->updateExistingPivot($products_id, ['status' => 'onhand']);
+            }
+            //update ledger
+            $ledger = Ledger::find($order->ledgers_id);
+            $ledger->status = 'approved';
+            $ledger->save();
+
+            //get relate point
+            $order_points_arr = OrderPoint::where('orders_id', $order->id)->get();
+            foreach ($order_points_arr as $order_points_id) {
+                //push notif
+                $user_os = Customer::find($order_points_id->customers_id);
+                $id_onesignal = $user_os->id_onesignal;
+                if (!empty($id_onesignal)) {
+                    $memo = $order_points_id->memo;
+                    $register = date("Y-m-d");
+                    //store to logs_notif
+                    $data = ['register' => $register, 'customers_id' => $order_points_id->customers_id, 'memo' => $memo];
+                    $logs = LogNotif::create($data);
+                    //push notif
+                    if ($user_os->type == 'agent') {
+                        if (!empty($id_onesignal)) {
+                            OneSignal::sendNotificationToUser(
+                                $memo,
+                                $id_onesignal,
+                                $url = null,
+                                $data = null,
+                                $buttons = null,
+                                $schedule = null
+                            );}
+                    } else {
+                        if (!empty($id_onesignal)) {
+                            OneSignal::sendNotificationToUser(
+                                $memo,
+                                $id_onesignal,
+                                $url = null,
+                                $data = null,
+                                $buttons = null,
+                                $schedule = null
+                            );}
+                    }
+                }
+            }
+
+            //push notif to agent
+            $user = Customer::find($order->agents_id);
+            $id_onesignal = $user->id_onesignal;
+            $memo = 'Hallo ' . $user->name . ', Order ' . $order->code . ' sudah diterima pelanggan.';
+            $register = date("Y-m-d");
+            //store to logs_notif
+            $data = ['register' => $register, 'customers_id' => $order->agents_id, 'memo' => $memo];
+            $logs = LogNotif::create($data);
+            //push notif
+            OneSignal::sendNotificationToUser(
+                $memo,
+                $id_onesignal,
+                $url = null,
+                $data = null,
+                $buttons = null,
+                $schedule = null
+            );
+            //response
+            $message = 'Pesanan Sudah Diterima.';
+            $status = true;
+            return $status;
+        } else {
+            $message = 'Update Delivery Status Gagal.';
+            $status = false;
+            return $status;
+        }
+    }
 
     public function gen_token()
     {
@@ -1738,6 +1874,17 @@ trait TraitModel
 
     public function get_last_code($type)
     {
+        if ($type == "bv_pairing_conv") {
+            $account = Order::where('type', 'bv_pairing_conv')
+                ->orderBy('id', 'desc')
+                ->first();
+            if ($account && (strlen($account->code) == 8)) {
+                $code = $account->code;
+            } else {
+                $code = acc_codedef_generate('BVP', 8);
+            }
+        }
+        
         if ($type == "stock_trsf") {
             $account = Order::where('type', 'stock_trsf')
                 ->orderBy('id', 'desc')

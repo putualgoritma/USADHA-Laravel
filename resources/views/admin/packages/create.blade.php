@@ -125,6 +125,20 @@
                     {{ trans('global.package.fields.discount_helper') }}
                 </p>
             </div>
+
+            <div class="form-group {{ $errors->has('bv') ? 'has-error' : '' }}">
+                <label for="bv">{{ trans('global.package.fields.bv') }}</label>
+                <input type="number" id="bv" name="bv" class="form-control" value="{{ old('bv', isset($package) ? $package->bv : '') }}" step="0.01">
+                @if($errors->has('bv'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('bv') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.package.fields.bv_helper') }}
+                </p>
+            </div>
+
             <!-- <div class="form-group {{ $errors->has('cogs') ? 'has-error' : '' }}">
                 <label for="cogs">{{ trans('global.package.fields.cogs') }}</label>
                 <input type="number" id="cogs" name="cogs" class="form-control" value="{{ old('cogs', isset($package) ? $package->cogs : '') }}" step="0.01">

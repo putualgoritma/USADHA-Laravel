@@ -537,6 +537,8 @@ return [
             'deleted_at_helper' => '',
             'status' => 'Status',
             'status_helper' => '',
+            'bv' => 'BV',
+            'bv_helper' => '',
         ],
     ],
     'production' => [
@@ -792,6 +794,23 @@ return [
             'register_helper' => '',
             'memo' => 'Keterangan',
             'memo_helper' => '',
+        ],
+    ],
+    'pairingpending' => [
+        'title' => 'BV Pairing Tunggu',
+        'title_create' => 'Konversi BV Pairing Tunggu',
+        'title_singular' => 'Tunggu',
+        'fields' => [
+            'l_balance' => 'BV Tunggu Kiri',
+            'l_balance_helper' => '',
+            'r_balance' => 'BV Tunggu Kanan',
+            'r_balance_helper' => '',
+            'balance' => 'Total BV Tunggu',
+            'balance_helper' => '',
+            'percent' => 'Persen Konversi',
+            'percent_helper' => '',
+            'point' => 'Jenis Poin Konversi',
+            'point_helper' => '',
         ],
     ],
     'withdraw' => [

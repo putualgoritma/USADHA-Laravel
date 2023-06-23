@@ -177,6 +177,16 @@
                             {{ trans('global.orderpoint.title') }}
                         </a>
                     </li>  
+
+                    <li class="nav-item">
+                        <a href="{{ route("admin.members.pairingPending") }}" class="nav-link {{ request()->is('admin/pairing-pending') || request()->is('admin/pairing-pending/*') ? 'active' : '' }}">
+                            <i class="fas fa-file-powerpoint nav-icon">
+
+                            </i>
+                            {{ trans('global.pairingpending.title') }}
+                        </a>
+                    </li>
+
                     <li class="nav-item">
                         <a href="{{ route("admin.activation-type.index") }}" class="nav-link {{ request()->is('admin/activation-type') || request()->is('admin/activation-type/*') ? 'active' : '' }}">
                             <i class="fas fa-toggle-on nav-icon">

@@ -102,12 +102,58 @@ class ProductsApiController extends Controller
                 ->where('status', '=', 'show')
                 ->get();
         } else {
-            $products = Product::where(function ($qry) {
-                $qry->where('package_type', '!=', 'resellernew')
-                    ->orWhere('model', '!=', 'reseller');
-            })
+            $products = Product::where('package_type', '!=', 'resellernew')
+                ->where('model', '!=', 'reseller')
                 ->where('status', '=', 'show')
                 ->get();
+        }
+
+        return $products;
+    }
+
+    public function indexMemberAgent(Request $request)
+    {
+        $agent_type = 'non';
+        if ($request->agent_id) {
+            //get agent agent_type
+            $agent = CustomerApi::find($request->agent_id);
+            $agent_type = $agent->agent_type;
+        }
+        if ($agent_type == 'reseller') {
+            try {
+                if (isset($request->page)) {
+                    $products = Product::select('*')->FilterInput()
+                        ->where('type', '=', 'single')
+                        ->where('status', '=', 'show')
+                        ->where('model', '=', 'reseller')
+                        ->paginate(10, ['*'], 'page', $request->page);
+                } else {
+                    $products = Product::select('*')->FilterInput()
+                        ->where('type', '=', 'single')
+                        ->where('status', '=', 'show')
+                        ->where('model', '=', 'reseller')
+                        ->get();
+                }
+            } catch (QueryException $exception) {
+                return;
+            }} else {
+            try {
+                if (isset($request->page)) {
+                    $products = Product::select('*')->FilterInput()
+                        ->where('type', '=', 'single')
+                        ->where('status', '=', 'show')
+                        ->where('model', '!=', 'reseller')
+                        ->paginate(10, ['*'], 'page', $request->page);
+                } else {
+                    $products = Product::select('*')->FilterInput()
+                        ->where('type', '=', 'single')
+                        ->where('status', '=', 'show')
+                        ->where('model', '!=', 'reseller')
+                        ->get();
+                }
+            } catch (QueryException $exception) {
+                return;
+            }
         }
 
         return $products;
@@ -122,6 +168,7 @@ class ProductsApiController extends Controller
                     ->where('package_type', '=', 'member')
                     ->where('activation_type_id', '=', $request->activation_type_id)
                     ->where('status', '=', 'show')
+                    ->where('model', '=', 'network')
                     ->paginate(10, ['*'], 'page', $request->page);
             } else {
                 $products = Product::select('*')->FilterInput()
@@ -129,6 +176,7 @@ class ProductsApiController extends Controller
                     ->where('package_type', '=', 'member')
                     ->where('activation_type_id', '=', $request->activation_type_id)
                     ->where('status', '=', 'show')
+                    ->where('model', '=', 'network')
                     ->get();
             }
         } catch (QueryException $exception) {
@@ -145,6 +193,7 @@ class ProductsApiController extends Controller
                 $products = Product::select('*')->FilterInput()
                     ->where('type', '=', 'single')
                     ->where('status', '=', 'show')
+                    ->where('model', '=', 'network')
                     ->paginate(10, ['*'], 'page', $request->page);
             } else {
                 $products = Product::where(function ($qry) {
@@ -152,6 +201,7 @@ class ProductsApiController extends Controller
                         ->orWhere('package_type', '=', 'none');
                 })
                     ->where('status', '=', 'show')
+                    ->where('model', '=', 'network')
                     ->get();
             }
         } catch (QueryException $exception) {
