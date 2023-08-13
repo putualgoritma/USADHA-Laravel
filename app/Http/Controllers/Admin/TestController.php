@@ -8,13 +8,95 @@ use Illuminate\Http\Request;
 use App\Withdraw;
 use App\Careertype;
 use App\Jobs\ProcessPairing;
+use App\CustomerApi;
+use App\Order;
+use App\Product;
+use App\Events\OrderClosed;
+use App\Events\MemberActivated;
+use DB;
+use App\Classes\OrderClass;
+use App\Classes\MemberClass;
+use App\NetworkFee;
+use App\Member;
 
 class TestController extends Controller
 {
     use TraitModel;
+    private $var_glob;
+
+    public function orderTest()
+    {
+        $var_loc = (object) $this->var_glob;
+        //return (7 + $var_loc->nilai);
+        return $this->orderMember->name;
+    }
 
     public function test(Request $request)
     {
+        $orderClass = new OrderClass(19);
+        return $orderClass->orderLevelFee();
+        
+        /*
+        $user = CustomerApi::where('id', 18)->first();
+        $slot_arr = array();
+        $get_slot_empty = $this->get_slot_empty($user->slot_x, $user->slot_y, 1, $slot_arr);
+        return $get_slot_empty['ex']." - ".$get_slot_empty['ey'];
+        /*
+        $orderClass = new OrderClass(17);
+        return $orderClass->orderRecieved();
+
+        /*
+        $memberClass = new MemberClass(17);
+        $up_arr = array();
+        return $this->get_list_refferal($memberClass->member->id, $up_arr, 0, 5);
+
+        /*
+        $memberClass = new MemberClass(3);
+        $memberLegBalance = $memberClass->memberLegBalance(0, 0, 1);
+        return $memberLegBalance;
+
+        return $orderClass->orderRecieved();
+        /*
+        $order = Order::where('id', 25)->with('products')->first();
+        $orderClosed = event(new OrderClosed($order));
+        echo $orderClosed[0]->data->total;
+        //print_r($orderClosed);
+        //$orderClosed->total;
+        // $storeTest = DB::table('tbltest')->insert(
+        //     ['code' => $order->code, 'memo' => $order->memo]
+        // );
+        /*
+        $request = array();
+        $request['cart']['item'][0]['id'] = 18;
+        $request['cart']['item'][0]['qty'] = 2;
+        $request['cart']['item'][0]['harga'] = 15000000;
+        $request['cart']['item'][1]['id'] = 16;
+        $request['cart']['item'][1]['qty'] = 1;
+        $request['cart']['item'][1]['harga'] = 5000;
+        $request = (object)$request;
+        $request->id = 85;
+        $request->agents_id=9504;
+        print_r(event(new MemberActivated($request)));
+
+        /*
+        $orderLegBalance = $this->orderLegBalance(0,10,17);
+        echo $orderLegBalance->status;
+        echo $orderLegBalance->data;
+        /*
+        echo $this->orderMemberHU(954, 'business');
+        /*
+        $this->orderInitTest();
+        echo $this->orderVarTest->cogs_total;
+        /*
+        $order_id = 15647;
+        $order = Order::where('id', $order_id)->with('products')->first();
+        $order->typeTrs = 'norequest';
+        $this->orderInit($order);
+        print_r($this->orderVar);
+        /*
+        $this->orderInit(45);
+        echo $this->orderTest();
+        /*
         $token=$this->gen_token();
         echo $token;
         /*

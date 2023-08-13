@@ -5,11 +5,12 @@ namespace App\Http\Controllers\Admin;
 use App\Account;
 use App\Accountlock;
 use App\AccountsGroup;
-use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\MassDestroyAccountRequest;
-use Yajra\DataTables\Facades\DataTables;
 use App\Traits\TraitModel;
+use DB;
+use Illuminate\Http\Request;
+use Yajra\DataTables\Facades\DataTables;
 
 class AccountController extends Controller
 {
@@ -27,18 +28,18 @@ class AccountController extends Controller
 
         if ($request->ajax()) {
             $query = Account::query()
-                ->orderBy("code", "asc")    
+                ->orderBy("code", "asc")
                 ->filterDates()
                 ->select(sprintf('%s.*', 'accounts'));
-            $table = Datatables::of($query);           
+            $table = Datatables::of($query);
 
             $table->addColumn('placeholder', '&nbsp;');
             $table->addColumn('actions', '&nbsp;');
 
             $table->editColumn('actions', function ($row) {
-                $viewGate      = 'account_show';
-                $editGate      = 'account_edit';
-                $deleteGate    = 'account_delete';
+                $viewGate = 'account_show';
+                $editGate = 'account_edit';
+                $deleteGate = 'account_delete';
                 $crudRoutePart = 'accounts';
 
                 return view('partials.datatablesActions', compact(
@@ -75,8 +76,9 @@ class AccountController extends Controller
     public function create()
     {
         abort_unless(\Gate::allows('account_create'), 403);
+        
         $accountsgroup = AccountsGroup::pluck('name', 'id');
-        return view('admin.accounts.create', compact('accountsgroup'));        
+        return view('admin.accounts.create', compact('accountsgroup'));
     }
 
     /**
@@ -90,10 +92,10 @@ class AccountController extends Controller
         abort_unless(\Gate::allows('account_create'), 403);
 
         $accounts_group_id = $request->input('accounts_group_id');
-        $last_code=$this->acc_get_last_code($accounts_group_id);
-        $code=acc_code_generate($last_code,5,2);
-        $data=array_merge($request->all(), ['code' => $code]);
-        $account=Account::create($data);
+        $last_code = $this->acc_get_last_code($accounts_group_id);
+        $code = acc_code_generate($last_code, 5, 2);
+        $data = array_merge($request->all(), ['code' => $code]);
+        $account = Account::create($data);
 
         return redirect()->route('admin.accounts.index');
     }
@@ -121,7 +123,7 @@ class AccountController extends Controller
     {
         abort_unless(\Gate::allows('account_edit'), 403);
         $accountsgroup = AccountsGroup::pluck('name', 'id');
-        return view('admin.accounts.edit', compact('account','accountsgroup'));
+        return view('admin.accounts.edit', compact('account', 'accountsgroup'));
     }
 
     /**
@@ -137,13 +139,13 @@ class AccountController extends Controller
 
         //check if locked
         $accountlock = Accountlock::where('account_id', '=', $account->id)->get();
-        if($account->accounts_group_id!=$request->input('accounts_group_id') && count($accountlock)==0){
+        if ($account->accounts_group_id != $request->input('accounts_group_id') && count($accountlock) == 0) {
             $accounts_group_id = $request->input('accounts_group_id');
-            $last_code=$this->acc_get_last_code($accounts_group_id);
-            $code=acc_code_generate($last_code,5,2);
-            $data=array_merge($request->all(), ['code' => $code]);
-        }else{
-            $data=['name' => $request->input('name'),'accounts_group_id' => $account->accounts_group_id];
+            $last_code = $this->acc_get_last_code($accounts_group_id);
+            $code = acc_code_generate($last_code, 5, 2);
+            $data = array_merge($request->all(), ['code' => $code]);
+        } else {
+            $data = ['name' => $request->input('name'), 'accounts_group_id' => $account->accounts_group_id];
         }
         $account->update($data);
 
@@ -160,7 +162,11 @@ class AccountController extends Controller
     {
         abort_unless(\Gate::allows('account_delete'), 403);
 
-        // $account->delete();
+        //check if exist
+        // return $this->exist($account->id);
+        if (!$this->exist($account->id)) {
+            $account->delete();
+        }
 
         // return back();
         return redirect()->route('admin.accounts.index');
@@ -172,5 +178,24 @@ class AccountController extends Controller
 
         // return response(null, 204);
         return redirect()->route('admin.accounts.index');
+    }
+
+    static function exist($account_id)
+    {
+        //check if not exist on ledger_entries
+        $ledger_entries_exist = false;
+        if (DB::table('ledger_entries')->where('accounts_id', $account_id)->exists()) {
+            $ledger_entries_exist = true;
+        }
+        //check if not exist on accountlocks
+        $accountlocks_exist = false;
+        if (DB::table('accountlocks')->where('account_id', $account_id)->exists()) {
+            $accountlocks_exist = true;
+        }
+        if ($ledger_entries_exist || $accountlocks_exist) {
+            return true;
+        } else {
+            return false;
+        }
     }
 }

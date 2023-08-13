@@ -45,7 +45,6 @@ Route::group(['prefix' => 'close', 'namespace' => 'Api\V1\Admin', 'middleware' =
     Route::get('/products', 'ProductsApiController@index');
     Route::get('product/{id}', 'ProductsApiController@show');
     Route::post('topup', 'TopupsApiController@store');
-    Route::post('activate', 'CustomersApiController@activate');
     Route::get('/packages', 'PackagesApiController@index');
     Route::get('package/{id}', 'PackagesApiController@show');
     Route::get('/accountcashs', 'AccountsApiController@cash');
@@ -71,7 +70,6 @@ Route::group(['prefix' => 'close', 'namespace' => 'Api\V1\Admin', 'middleware' =
     Route::post('withdraw', 'TopupsApiController@withdraw');
     Route::get('downline/{id}', 'CustomersApiController@downline');
     Route::get('downline-agent/{id}', 'CustomersApiController@downlineAgent');
-    Route::post('/register-downline', 'CustomersApiController@registerDownline');
     Route::get('order-agent-process/{id}', 'OrdersApiController@orderAgentProcess');
     Route::get('order-cancel/{id}', 'OrdersApiController@orderCancel');
     Route::get('delivery-agent-update/{id}', 'OrdersApiController@deliveryAgentUpdate');
@@ -90,7 +88,6 @@ Route::group(['prefix' => 'close', 'namespace' => 'Api\V1\Admin', 'middleware' =
     Route::get('member-tree', 'CustomersApiController@downlineTree');
     // Route::get('downline-test/{id}', 'CustomersApiController@downlineTest');
 
-    Route::post('upgrade', 'CustomersApiController@upgrade');
     Route::get('/products-member-upgrade/{id}', 'ProductsApiController@indexMemberUpgrade');
     Route::post('/topup/map', 'TopupsApiController@topupMAP');
 

@@ -27,7 +27,8 @@
                 <label for="type">{{ trans('global.activation_type.fields.type') }}*</label>
                 <select name="type" class="form-control" readonly>
                     <option value="user"{{(old('type', $activation_type->type) == 'user' ? 'selected' : '')}}>user</option>  
-                    <option value="business"{{(old('type', $activation_type->type) == 'business' ? 'selected' : '')}}>business</option>                  
+                    <option value="business"{{(old('type', $activation_type->type) == 'business' ? 'selected' : '')}}>business</option>   
+                    <option value="mercy"{{(old('type', $activation_type->type) == 'mercy' ? 'selected' : '')}}>mercy</option>                
                 </select>
                 @if($errors->has('type'))
                     <em class="invalid-feedback">

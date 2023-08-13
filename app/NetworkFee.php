@@ -35,6 +35,15 @@ class NetworkFee extends Model
         'updated_at',
         'deleted_at',
         'bv_min_pairing',
-        'sbv2',      
+        'sbv2',
+        'gen1',   
+        'gen2',
+        'gen3',
+        'gen4',
+        'gen5',  
+        'genbv', 
+        'pointbv',
+        'deep_point',
+        'levelingbv',
     ];
 }

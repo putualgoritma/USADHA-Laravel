@@ -73,6 +73,9 @@ class AccountlockController extends Controller
     {
         abort_unless(\Gate::allows('accountlock_create'), 403);
 
+        // $result = AccountController::exist(99);
+        // return $result;
+
         $accounts = Account::orderBy("code", "asc")
             ->get();
 

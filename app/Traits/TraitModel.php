@@ -21,12 +21,8 @@ use App\Pairing;
 use App\Payreceivable;
 use App\PayreceivableTrs;
 use App\Production;
-use DB;
-use Illuminate\Database\QueryException;
 use App\Tokensale;
-use App\PairingInfo;
-use App\LogNotif;
-use App\Member;
+use DB;
 use OneSignal;
 
 trait TraitModel
@@ -34,136 +30,17 @@ trait TraitModel
     private $fee_pairing_amount = 5;
     private $id_order_priv = 0;
 
-    public function orderCompleted($id)
+    public function traitTestFunc()
     {
-        /*update order status */
-        $order = Order::find($id);
-        //check if activation member
-        if ($order->type == 'activation_member') {
-            $activation_member = Customer::find($order->customers_activation_id);
-            $activation_member->status = 'active';
-            $activation_member->save();
-        }
-        //if upgrade
-        if ($order->type == 'activation_member' && $order->activation_type_id_old > 0) {
-            $activation_member = Customer::find($order->customers_activation_id);
-            $activation_member->activation_type_id = $order->activation_type_id;
-            $activation_member->save();
-        }
-        if ($order->status == 'approved' && $order->status_delivery == 'delivered') {
-            //process pairing
-            $pairinginfo = PairingInfo::where('order_id', $order->id)->first();
-            if ($order->bv_automaintain_amount > 0) {
-                $this->fee_auto_maintain($pairinginfo->order_id, $pairinginfo->ref_id, $pairinginfo->bv_total, $pairinginfo->bvcv_amount, $pairinginfo->ref1_fee_point_sale, $pairinginfo->ref1_fee_point_upgrade, $pairinginfo->ref2_fee_point_sale, $pairinginfo->ref2_fee_point_upgrade, $pairinginfo->ref1_flush_out, $pairinginfo->ledger_id, $pairinginfo->cba2, $pairinginfo->cbmart, $pairinginfo->points_fee_id, $pairinginfo->points_upg_id, $pairinginfo->ref2_id, $pairinginfo->memo, $pairinginfo->member_get_flush_out, $pairinginfo->package_type, $pairinginfo->ref_fee_lev, $pairinginfo->customer_id);
-            } else if ($order->bv_reseller_amount > 0) {
+        return '125';
+    }
 
-            } else {
-                $this->fee_pairing($pairinginfo->order_id, $pairinginfo->ref_id, $pairinginfo->bv_total, $pairinginfo->bvcv_amount, $pairinginfo->ref1_fee_point_sale, $pairinginfo->ref1_fee_point_upgrade, $pairinginfo->ref2_fee_point_sale, $pairinginfo->ref2_fee_point_upgrade, $pairinginfo->ref1_flush_out, $pairinginfo->ledger_id, $pairinginfo->cba2, $pairinginfo->cbmart, $pairinginfo->points_fee_id, $pairinginfo->points_upg_id, $pairinginfo->ref2_id, $pairinginfo->memo, $pairinginfo->member_get_flush_out, $pairinginfo->package_type, $pairinginfo->ref_fee_lev, $pairinginfo->customer_id);
-            }
-
-            //update order status
-            $order->status_delivery = 'received';
-            $order->save();
-            //set trf points from Usadha Bhakti to Agent
-            $com_row = Member::select('*')
-                ->where('def', '=', '1')
-                ->get();
-            $com_id = $com_row[0]->id;
-            $points_id = 1;
-            $points_id2 = 2;
-            $points_id3 = 3;
-            $points_id4 = 4;
-            $memo = $order->memo;
-            $total = $order->total;
-            $order->points()->attach($points_id, ['amount' => $total, 'type' => 'C', 'status' => 'onhand', 'memo' => 'Balik Poin dari ' . $memo, 'customers_id' => $com_id]);
-            //update pivot points
-            $orderpoints = OrderPoint::where('orders_id', $id)->get();
-            foreach ($orderpoints as $key => $orderpoint) {
-                $orderpoint_upd = OrderPoint::find($orderpoint->id);
-                $orderpoint_upd->status = 'onhand';
-                $orderpoint_upd->save();
-            }
-            //update pivot BVPairingQueue
-            $pairingqueues = BVPairingQueue::where('order_id', $id)->get();
-            foreach ($pairingqueues as $key => $pairingqueue) {
-                $pairingqueue_upd = BVPairingQueue::find($pairingqueue->id);
-                $pairingqueue_upd->status = 'active';
-                $pairingqueue_upd->save();
-            }
-
-            //update pivot products details
-            $ids = $order->productdetails()->allRelatedIds();
-            foreach ($ids as $products_id) {
-                $order->productdetails()->updateExistingPivot($products_id, ['status' => 'onhand']);
-            }
-            //update ledger
-            $ledger = Ledger::find($order->ledgers_id);
-            $ledger->status = 'approved';
-            $ledger->save();
-
-            //get relate point
-            $order_points_arr = OrderPoint::where('orders_id', $order->id)->get();
-            foreach ($order_points_arr as $order_points_id) {
-                //push notif
-                $user_os = Customer::find($order_points_id->customers_id);
-                $id_onesignal = $user_os->id_onesignal;
-                if (!empty($id_onesignal)) {
-                    $memo = $order_points_id->memo;
-                    $register = date("Y-m-d");
-                    //store to logs_notif
-                    $data = ['register' => $register, 'customers_id' => $order_points_id->customers_id, 'memo' => $memo];
-                    $logs = LogNotif::create($data);
-                    //push notif
-                    if ($user_os->type == 'agent') {
-                        if (!empty($id_onesignal)) {
-                            OneSignal::sendNotificationToUser(
-                                $memo,
-                                $id_onesignal,
-                                $url = null,
-                                $data = null,
-                                $buttons = null,
-                                $schedule = null
-                            );}
-                    } else {
-                        if (!empty($id_onesignal)) {
-                            OneSignal::sendNotificationToUser(
-                                $memo,
-                                $id_onesignal,
-                                $url = null,
-                                $data = null,
-                                $buttons = null,
-                                $schedule = null
-                            );}
-                    }
-                }
-            }
-
-            //push notif to agent
-            $user = Customer::find($order->agents_id);
-            $id_onesignal = $user->id_onesignal;
-            $memo = 'Hallo ' . $user->name . ', Order ' . $order->code . ' sudah diterima pelanggan.';
-            $register = date("Y-m-d");
-            //store to logs_notif
-            $data = ['register' => $register, 'customers_id' => $order->agents_id, 'memo' => $memo];
-            $logs = LogNotif::create($data);
-            //push notif
-            OneSignal::sendNotificationToUser(
-                $memo,
-                $id_onesignal,
-                $url = null,
-                $data = null,
-                $buttons = null,
-                $schedule = null
-            );
-            //response
-            $message = 'Pesanan Sudah Diterima.';
-            $status = true;
-            return $status;
-        } else {
-            $message = 'Update Delivery Status Gagal.';
-            $status = false;
-            return $status;
-        }
+    public function network_fee($code)
+    {
+        $networkfee_row = NetworkFee::select('*')
+            ->Where('code', '=', $code)
+            ->first();
+        return $networkfee_row;
     }
 
     public function gen_token()
@@ -173,7 +50,7 @@ trait TraitModel
             ->where('code', $code)
             ->orderBy('created_at', 'desc')
             ->first();
-        if($exist_token){
+        if ($exist_token) {
             return $this->gen_token();
         }
         return $code;
@@ -207,12 +84,12 @@ trait TraitModel
                 ->where('status_delivery', '=', 'received')
                 ->where('bv_automaintain_amount', '>=', $bv_automaintain_amount)
                 ->whereDate('created_at', '=', date('Y-m-d'))
-                // ->whereYear('created_at', '=', $year)
-                // ->whereMonth('created_at', '=', $month)
+            // ->whereYear('created_at', '=', $year)
+            // ->whereMonth('created_at', '=', $month)
                 ->first();
-                if (!$order) {
-                    $auto_maintain_bv = $bv_automaintain_amount;
-                }
+            if (!$order) {
+                $auto_maintain_bv = $bv_automaintain_amount;
+            }
         }
         return $auto_maintain_bv;
     }
@@ -322,8 +199,8 @@ trait TraitModel
                         ->where('status_delivery', '=', 'received')
                         ->where('bv_automaintain_amount', '>', 0)
                         ->whereDate('created_at', '=', date('Y-m-d'))
-                        // ->whereYear('created_at', '=', $year)
-                        // ->whereMonth('created_at', '=', $month)
+                    // ->whereYear('created_at', '=', $year)
+                    // ->whereMonth('created_at', '=', $month)
                         ->first();
                     //if qualified
                     if ($order) {
@@ -347,180 +224,6 @@ trait TraitModel
             }
         } else {
             return $total;
-        }
-    }
-
-    public function test_pairing_bin($order_id, $customer_id, $bv_amount_inc, $points_fee_id)
-    {
-        //init
-        $fee_out = 0;
-        //get order detail
-        $order = Order::find($order_id);
-        //get member detail
-        $member = Customer::select('activation_type_id', 'slot_x', 'slot_y')
-            ->where('id', $customer_id)
-            ->first();
-        $lev = $member->slot_x - 0;
-        $slot_prev_x = $member->slot_x;
-        $slot_prev_y = $member->slot_y;
-        //BVPO
-        $bvpo_row = NetworkFee::select('*')
-            ->Where('code', '=', 'BVPO')
-            ->first();
-        //get max level
-        $member_pairing_row = NetworkFee::select('*')
-            ->Where('type', '=', 'pairing')
-            ->Where('activation_type_id', '=', $member->activation_type_id)
-            ->first();
-        $pairing_lev_max = $member_pairing_row->deep_level;
-        $lev_count = 1;
-        //loop upline
-        for ($i = 0; $i < $lev; $i++) {
-            $slot_x = $slot_prev_x - 1;
-            $slot_y = ceil($slot_prev_y / 2);
-            //echo $slot_x." - ".$slot_y;
-            //get upline detail
-            $upline = Customer::select('*')
-                ->where('slot_x', $slot_x)
-                ->where('slot_y', $slot_y)
-                ->where('status', 'active')
-                ->where('activation_type_id', '>', 1)
-                ->first();
-            //print_r($upline);
-
-            if ($upline) {
-                //get upline queue
-                $bv_queue = $this->get_bv_queue($upline->id);
-                $bv_pairing_r = $bv_queue['r'];
-                $bv_pairing_l = $bv_queue['l'];
-
-                //get prev position
-                if ($slot_prev_y % 2 == 0) {
-                    $bv_pairing_r += $bv_amount_inc;
-                    $position = 'R';
-                } else {
-                    $bv_pairing_l += $bv_amount_inc;
-                    $position = 'L';
-                }
-                $bv_pairing = $bv_pairing_r;
-                if ($bv_pairing_l < $bv_pairing_r) {
-                    $bv_pairing = $bv_pairing_l;
-                }
-                $bv_pairing = ($bv_pairing - $bv_queue['c']);
-                //compare min pairing
-                //get network fee pairing -> upline activation type
-                $nf_upline_pairing_row = NetworkFee::select('*')
-                    ->Where('type', '=', 'pairing')
-                    ->Where('activation_type_id', '=', $upline->activation_type_id)
-                    ->first();
-                //memo
-                $memo = $upline->code . " - " . $upline->name;
-                //get min bv pairing -> upline activation type
-                $min_bv_pairing = $nf_upline_pairing_row->bv_min_pairing * $bvpo_row->amount;
-                echo $bvpo_row->amount . '-' . $bv_amount_inc . '-' . $upline->code . '-' . $bv_pairing . '-' . $min_bv_pairing . '-' . $upline->status . '-' . $upline->type;
-                // echo '</br>';
-                //check if reach lev max
-                if ($lev_count <= $pairing_lev_max) {
-                    $pairing_sbv = $member_pairing_row->sbv;
-                } else {
-                    $pairing_sbv = $member_pairing_row->sbv2;
-                }
-                //mod bv pairing
-                $bv_pairing_index = floor($bv_pairing / $min_bv_pairing);
-                $bv_pairing = $min_bv_pairing * $bv_pairing_index;
-                if (($bv_pairing >= $min_bv_pairing) && $pairing_sbv > 0) {
-                    if ($upline->status == 'active' && $upline->type != "user") {
-                        $upline_fee_pairing = (($pairing_sbv) / 100) * $bv_pairing;
-                        $upline_amount = $upline_fee_pairing;
-                        //hitung total bv_amount hari ini yang sudah di pairing di tbl pairing {bvarp_paired}
-                        $reg_today = date('Y-m-d');
-                        $daily_amount = $this->get_bv_daily_queue($upline->id, $reg_today);
-                        $daily_amount_paired = $daily_amount + $upline_fee_pairing;
-                        if ($daily_amount_paired <= $nf_upline_pairing_row->fee_day_max) {
-                            $fee_out += (float) $upline_fee_pairing;
-                            $this->fee_pairing_amount += (float) $upline_fee_pairing;
-                            //$order->points()->attach($points_fee_id, ['amount' => $upline_fee_pairing, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Poin Komisi (Pairing) dari group ' . $memo, 'customers_id' => $upline->id]);
-                        } else {
-                            $upline_fee_pairing = $nf_upline_pairing_row->fee_day_max - $daily_amount;
-                            if ($upline_fee_pairing > 0) {
-                                $fee_out += (float) $upline_fee_pairing;
-                                $this->fee_pairing_amount += (float) $upline_fee_pairing;
-                                //$order->points()->attach($points_fee_id, ['amount' => $upline_fee_pairing, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Poin Komisi (Pairing) dari group ' . $memo, 'customers_id' => $upline->id]);
-                            }
-                        }
-                        //insert into tbl queue C
-                        $data = ['order_id' => $order_id, 'customer_id' => $upline->id, 'bv_amount' => $bv_pairing, 'position' => 'N', 'status' => 'active', 'type' => 'C', 'pairing_amount' => $upline_fee_pairing];
-                        //$queue_crt = BVPairingQueue::create($data);
-                    }
-                }
-                //insert into tbl queue D
-                $data = ['order_id' => $order_id, 'customer_id' => $upline->id, 'bv_amount' => $bv_amount_inc, 'position' => $position, 'status' => 'active', 'type' => 'D'];
-                //$queue_crt = BVPairingQueue::create($data);
-            }
-            $lev_count++;
-            //set prev
-            $slot_prev_x = $slot_x;
-            $slot_prev_y = $slot_y;
-        }
-        return $fee_out;
-    }
-
-    public function bugPairing($customer_id, $bv_amount_inc, $position)
-    {
-        $upline = Customer::select('*')
-            ->where('id', $customer_id)
-            ->first();
-
-        if ($upline) {
-            //BVPO
-            $bvpo_row = NetworkFee::select('*')
-                ->Where('code', '=', 'BVPO')
-                ->first();
-
-            //get upline queue
-            $bv_queue = $this->get_bv_queue($upline->id);
-            $bv_pairing_r = $bv_queue['r'];
-            $bv_pairing_l = $bv_queue['l'];
-
-            //get prev position
-            if ($position == 'R') {
-                $bv_pairing_r += $bv_amount_inc;
-            } else {
-                $bv_pairing_l += $bv_amount_inc;
-            }
-            $bv_pairing = $bv_pairing_r;
-            if ($bv_pairing_l < $bv_pairing_r) {
-                $bv_pairing = $bv_pairing_l;
-            }
-            $bv_pairing = ($bv_pairing - $bv_queue['c']);
-            //compare min pairing
-            //get network fee pairing -> upline activation type
-            $nf_upline_pairing_row = NetworkFee::select('*')
-                ->Where('type', '=', 'pairing')
-                ->Where('activation_type_id', '=', $upline->activation_type_id)
-                ->first();
-            //memo
-            $memo = $upline->code . " - " . $upline->name;
-            //get min bv pairing -> upline activation type
-            $min_bv_pairing = $nf_upline_pairing_row->bv_min_pairing * $bvpo_row->amount;
-            //check if reach lev max
-            $pairing_sbv = $nf_upline_pairing_row->sbv;
-
-            if (($bv_pairing >= $min_bv_pairing) && $pairing_sbv > 0) {
-                if ($upline->status == 'active' && $upline->type != "user") {
-                    $upline_fee_pairing = (($pairing_sbv) / 100) * $bv_pairing;
-                    $upline_amount = $upline_fee_pairing;
-                    $reg_today = date('Y-m-d');
-                    $daily_amount = $this->get_bv_daily_queue($upline->id, $reg_today);
-                    $daily_amount_paired = $daily_amount + $upline_fee_pairing;
-                    if ($daily_amount_paired <= $nf_upline_pairing_row->fee_day_max) {
-                        echo '<=' . ' : ' . $daily_amount . ' : ' . $daily_amount_paired . ' : ' . $nf_upline_pairing_row->fee_day_max . ' : ' . $upline_fee_pairing;
-                    } else {
-                        $upline_fee_pairing = $nf_upline_pairing_row->fee_day_max - $daily_amount;
-                        echo '>' . ' : ' . $daily_amount . ' : ' . $daily_amount_paired . ' : ' . $nf_upline_pairing_row->fee_day_max . ' : ' . $upline_fee_pairing;
-                    }
-                }
-            }
         }
     }
 
@@ -599,121 +302,6 @@ trait TraitModel
             //echo $downline_total." h <br>";
             return $downline_total;
         }
-    }
-
-    public function pairing_bin($order_id, $customer_id, $bv_amount_inc, $points_fee_id)
-    {
-        //init
-        $fee_out = 0;
-        //get order detail
-        $order = Order::find($order_id);
-        //get member detail
-        $member = Customer::select('activation_type_id', 'slot_x', 'slot_y')
-            ->where('id', $customer_id)
-            ->first();
-        $lev = $member->slot_x - 0;
-        $slot_prev_x = $member->slot_x;
-        $slot_prev_y = $member->slot_y;
-        //BVPO
-        $bvpo_row = NetworkFee::select('*')
-            ->Where('code', '=', 'BVPO')
-            ->first();
-        //get max level
-        $member_pairing_row = NetworkFee::select('*')
-            ->Where('type', '=', 'pairing')
-            ->Where('activation_type_id', '=', $member->activation_type_id)
-            ->first();
-        $pairing_lev_max = $member_pairing_row->deep_level;
-        $lev_count = 1;
-        //loop upline
-        for ($i = 0; $i < $lev; $i++) {
-            $slot_x = $slot_prev_x - 1;
-            $slot_y = ceil($slot_prev_y / 2);
-            //echo $slot_x." - ".$slot_y;
-            //get upline detail
-            $upline = Customer::select('*')
-                ->where('slot_x', $slot_x)
-                ->where('slot_y', $slot_y)
-                ->where('status', 'active')
-                ->where('activation_type_id', '>', 1)
-                ->first();
-            //print_r($upline);
-
-            if ($upline) {
-                //get upline queue
-                $bv_queue = $this->get_bv_queue($upline->id);
-                $bv_pairing_r = $bv_queue['r'];
-                $bv_pairing_l = $bv_queue['l'];
-
-                //get prev position
-                if ($slot_prev_y % 2 == 0) {
-                    $bv_pairing_r += $bv_amount_inc;
-                    $position = 'R';
-                } else {
-                    $bv_pairing_l += $bv_amount_inc;
-                    $position = 'L';
-                }
-                $bv_pairing = $bv_pairing_r;
-                if ($bv_pairing_l < $bv_pairing_r) {
-                    $bv_pairing = $bv_pairing_l;
-                }
-                $bv_pairing = ($bv_pairing - $bv_queue['c']);
-                //compare min pairing
-                //get network fee pairing -> upline activation type
-                $nf_upline_pairing_row = NetworkFee::select('*')
-                    ->Where('type', '=', 'pairing')
-                    ->Where('activation_type_id', '=', $upline->activation_type_id)
-                    ->first();
-                //memo
-                $memo = $upline->code . " - " . $upline->name;
-                //get min bv pairing -> upline activation type
-                $min_bv_pairing = $nf_upline_pairing_row->bv_min_pairing * $bvpo_row->amount;
-                // echo $bvpo_row->amount . '-' . $bv_amount_inc . '-' . $upline->code . '-' . $bv_pairing . '-' . $min_bv_pairing . '-' . $upline->status . '-' . $upline->type;
-                // echo '</br>';
-                //check if reach lev max
-                if ($lev_count <= $pairing_lev_max) {
-                    $pairing_sbv = $member_pairing_row->sbv;
-                } else {
-                    $pairing_sbv = $member_pairing_row->sbv2;
-                }
-                //mod bv pairing
-                $bv_pairing_index = floor($bv_pairing / $min_bv_pairing);
-                $bv_pairing = $min_bv_pairing * $bv_pairing_index;
-                if (($bv_pairing >= $min_bv_pairing) && $pairing_sbv > 0) {
-                    if ($upline->status == 'active' && $upline->type != "user") {
-                        $upline_fee_pairing = (($pairing_sbv) / 100) * $bv_pairing;
-                        $upline_amount = $upline_fee_pairing;
-                        //hitung total bv_amount hari ini yang sudah di pairing di tbl pairing {bvarp_paired}
-                        $reg_today = date('Y-m-d');
-                        $daily_amount = $this->get_bv_daily_queue($upline->id, $reg_today);
-                        $daily_amount_paired = $daily_amount + $upline_fee_pairing;
-                        if ($daily_amount_paired <= $nf_upline_pairing_row->fee_day_max) {
-                            $fee_out += (float) $upline_fee_pairing;
-                            $this->fee_pairing_amount += (float) $upline_fee_pairing;
-                            $order->points()->attach($points_fee_id, ['amount' => $upline_fee_pairing, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Poin Komisi (Pairing) dari group ' . $memo, 'customers_id' => $upline->id]);
-                        } else {
-                            $upline_fee_pairing = $nf_upline_pairing_row->fee_day_max - $daily_amount;
-                            if ($upline_fee_pairing > 0) {
-                                $fee_out += (float) $upline_fee_pairing;
-                                $this->fee_pairing_amount += (float) $upline_fee_pairing;
-                                $order->points()->attach($points_fee_id, ['amount' => $upline_fee_pairing, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Poin Komisi (Pairing) dari group ' . $memo, 'customers_id' => $upline->id]);
-                            }
-                        }
-                        //insert into tbl queue C
-                        $data = ['order_id' => $order_id, 'customer_id' => $upline->id, 'bv_amount' => $bv_pairing, 'position' => 'N', 'status' => 'active', 'type' => 'C', 'pairing_amount' => $upline_fee_pairing];
-                        $queue_crt = BVPairingQueue::create($data);
-                    }
-                }
-                //insert into tbl queue D
-                $data = ['order_id' => $order_id, 'customer_id' => $upline->id, 'bv_amount' => $bv_amount_inc, 'position' => $position, 'status' => 'active', 'type' => 'D'];
-                $queue_crt = BVPairingQueue::create($data);
-            }
-            $lev_count++;
-            //set prev
-            $slot_prev_x = $slot_x;
-            $slot_prev_y = $slot_y;
-        }
-        return $fee_out;
     }
 
     public function get_bv_daily_queue($customer_id, $reg_today)
@@ -890,15 +478,34 @@ trait TraitModel
 
     }
 
-    public function get_list_upline($slot_x, $slot_y)
+    public function get_list_refferal($ref1_id, $up_arr, $level, $levelMax = 0)
+    {
+        $customer = Customer::find($ref1_id);
+        $ref2_id = $customer->ref_bin_id;
+        if ($ref2_id > 1) {
+            $referal = Customer::find($ref2_id);
+            $ref2_status = $referal->status;
+            $level++;
+            if ($levelMax >= $level) {
+                array_push($up_arr, $ref2_id);
+                return $this->get_list_refferal($ref2_id, $up_arr, $level, $levelMax);
+            }
+        }
+        return $up_arr;
+    }
+
+    public function get_list_upline($slot_x, $slot_y, $levelMax = 0)
     {
         $upline_arr = array();
         $lev = $slot_x - 0;
+        if ($levelMax > 0 && $lev>$levelMax) {
+            $lev = $levelMax;
+        }
         for ($i = 0; $i < $lev; $i++) {
             $slot_x = $slot_x - 1;
             $slot_y = ceil($slot_y / 2);
             //get upline detail
-            $upline = Customer::select('code')
+            $upline = Customer::select('code','id')
                 ->where('slot_x', $slot_x)
                 ->where('slot_y', $slot_y)
                 ->first();
@@ -906,8 +513,10 @@ trait TraitModel
             $upline_arr[$i]['y'] = $slot_y;
             if ($upline) {
                 $upline_arr[$i]['code'] = $upline->code;
+                $upline_arr[$i]['id'] = $upline->id;
             } else {
                 $upline_arr[$i]['code'] = 0;
+                $upline_arr[$i]['id'] = 0;
             }
         }
         return $upline_arr;
@@ -1116,68 +725,6 @@ trait TraitModel
             $down_arr = $this->downline_tree($downline->id, $down_arr, $status, $slot_x, $slot_y, $top_id);
         }
         return $down_arr;
-    }
-
-    public function fee_pairing($order_id, $ref_id, $bv_total, $bvcv_amount, $ref1_fee_point_sale, $ref1_fee_point_upgrade, $ref2_fee_point_sale, $ref2_fee_point_upgrade, $ref1_flush_out, $ledger_id, $cba2, $cbmart, $points_fee_id, $points_upg_id, $ref2_id, $memo, $member_get_flush_out, $package_type, $ref_fee_lev, $customer_id)
-    {
-        //PAIRING
-        if ($package_type == 0) {
-            //$fee_pairing = $this->pairing($order_id, $ref_id);
-            $fee_pairing = $this->pairing_bin($order_id, $customer_id, $bv_total, $points_fee_id);
-        } else {
-            $fee_pairing = 0;
-        }
-
-        //get netfee_amount
-        $bvcv = (($bvcv_amount) / 100) * $bv_total;
-        $bv_nett = $bv_total - $bvcv;
-        if ($package_type == 0) {
-            $res_netfee_amount = $ref1_fee_point_sale + $ref1_fee_point_upgrade + $ref2_fee_point_sale + $ref2_fee_point_upgrade + $fee_pairing + $ref1_flush_out;
-        } else {
-            $res_netfee_amount = $ref_fee_lev;
-        }
-
-        //set account
-        $acc_points = $this->account_lock_get('acc_points'); //'67'
-        $acc_res_netfee = $this->account_lock_get('acc_res_netfee'); //'70'
-        $acc_res_cashback = $this->account_lock_get('acc_res_cashback');
-        $points_amount = $res_netfee_amount + $cba2 + $cbmart;
-        $accounts = array($acc_points, $acc_res_netfee, $acc_res_cashback);
-        $amounts = array($points_amount, $res_netfee_amount, $cba2 + $cbmart);
-        $types = array('C', 'D', 'D');
-        //order & ledger
-        $order = Order::find($order_id);
-        $ledger = Ledger::find($ledger_id);
-        //ledger entries
-        for ($account = 0; $account < count($accounts); $account++) {
-            if ($accounts[$account] != '') {
-                $ledger->accounts()->attach($accounts[$account], ['entry_type' => $types[$account], 'amount' => $amounts[$account]]);
-            }
-        }
-
-        //set ref1 fee
-        //point sale
-        if ($ref1_fee_point_sale > 0) {
-            $order->points()->attach($points_fee_id, ['amount' => $ref1_fee_point_sale, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Poin Komisi (Refferal) dari ' . $memo, 'customers_id' => $ref_id]);
-        }
-        //point upgrade
-        if ($ref1_fee_point_upgrade > 0) {
-            $order->points()->attach($points_upg_id, ['amount' => $ref1_fee_point_upgrade, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Poin (Upgrade) Komisi (Refferal) dari ' . $memo, 'customers_id' => $ref_id]);
-        }
-
-        //set ref2 fee
-        //point sale
-        if ($ref2_fee_point_sale > 0) {
-            $order->points()->attach($points_fee_id, ['amount' => $ref2_fee_point_sale, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Poin Komisi (Refferal) dari ' . $memo, 'customers_id' => $ref2_id]);
-        }
-        //point upgrade
-        if ($ref2_fee_point_upgrade > 0) {
-            $order->points()->attach($points_upg_id, ['amount' => $ref2_fee_point_upgrade, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Poin (Upgrade) Komisi (Refferal) dari ' . $memo, 'customers_id' => $ref2_id]);
-        }
-        //point flush out
-        if ($ref1_flush_out > 0) {
-            $order->points()->attach($points_fee_id, ['amount' => $ref1_flush_out, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Poin Komisi (Flush Out) dari ' . $memo, 'customers_id' => $member_get_flush_out]);
-        }
     }
 
     public function test_post($account_id, $code)
@@ -1884,7 +1431,7 @@ trait TraitModel
                 $code = acc_codedef_generate('BVP', 8);
             }
         }
-        
+
         if ($type == "stock_trsf") {
             $account = Order::where('type', 'stock_trsf')
                 ->orderBy('id', 'desc')

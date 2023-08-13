@@ -126,7 +126,7 @@ class TreeController extends Controller
         $slot_arr = array();
         $slot_arr[0][0]['x'] = $slot_init_x;
         $slot_arr[0][0]['y'] = $slot_init_y;
-        $slot_customer = Customer::select('id', 'activation_type_id', 'code', 'name', 'status')->where("slot_x", $slot_init_x)->where("slot_y", $slot_init_y)->with('activations')->first();
+        $slot_customer = Customer::select('id', 'activation_type_id', 'code', 'name', 'status')->where("slot_x", $slot_init_x)->where("slot_y", $slot_init_y)->where("status", 'active')->with('activations')->first();
         if ($slot_customer) {
             $slot_arr[0][0]['data'] = $slot_customer;
             $top_id = $slot_customer->id;
@@ -137,7 +137,7 @@ class TreeController extends Controller
         for ($i = 1; $i <= 3; $i++) {
             $slot_arr[$i][0]['x'] = $slot_arr[$i - 1][0]['x'] + 1;
             $slot_arr[$i][0]['y'] = ($slot_arr[$i - 1][0]['y'] * 2) - 1;
-            $slot_customer = Customer::select('id', 'activation_type_id', 'code', 'name', 'status')->where("slot_x", $slot_arr[$i][0]['x'])->where("slot_y", $slot_arr[$i][0]['y'])->with('activations')->first();
+            $slot_customer = Customer::select('id', 'activation_type_id', 'code', 'name', 'status')->where("slot_x", $slot_arr[$i][0]['x'])->where("slot_y", $slot_arr[$i][0]['y'])->where("status", 'active')->with('activations')->first();
             if ($slot_customer) {
                 $slot_arr[$i][0]['data'] = $slot_customer;
             } else {
@@ -146,7 +146,7 @@ class TreeController extends Controller
             for ($j = 1; $j < pow(2, $i); $j++) {
                 $slot_arr[$i][$j]['x'] = $slot_arr[$i][$j - 1]['x'];
                 $slot_arr[$i][$j]['y'] = ($slot_arr[$i][$j - 1]['y']) + 1;
-                $slot_customer = Customer::select('id', 'activation_type_id', 'code', 'name', 'status')->where("slot_x", $slot_arr[$i][$j]['x'])->where("slot_y", $slot_arr[$i][$j]['y'])->with('activations')->first();
+                $slot_customer = Customer::select('id', 'activation_type_id', 'code', 'name', 'status')->where("slot_x", $slot_arr[$i][$j]['x'])->where("slot_y", $slot_arr[$i][$j]['y'])->where("status", 'active')->with('activations')->first();
                 if ($slot_customer) {
                     $slot_arr[$i][$j]['data'] = $slot_customer;
                 } else {

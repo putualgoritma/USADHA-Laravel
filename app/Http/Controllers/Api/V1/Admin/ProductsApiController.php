@@ -37,9 +37,23 @@ class ProductsApiController extends Controller
     public function activationType(Request $request)
     {
         if ($request->min) {
-            $activation = Activation::where('id', '>', $request->min)->get();
+            if ($request->min > 2) {
+                $activation = Activation::where('id', '>', $request->min)->where('type', '=', 'business')->get();
+            } else {
+                $activation = Activation::where('id', '>', $request->min)
+                    ->where(function ($query) {
+                        $query->where('type', 'business')
+                            ->orWhere('type', 'mercy');
+                    })
+                    ->get();
+            }
         } else {
-            $activation = Activation::where('id', '>', 1)->get();
+            $activation = Activation::where('id', '>', 1)
+                ->where(function ($query) {
+                    $query->where('type', 'business')
+                        ->orWhere('type', 'mercy');
+                })
+                ->get();
         }
         if (is_null($activation)) {
             $message = 'Data not found.';
@@ -64,6 +78,7 @@ class ProductsApiController extends Controller
         $products = Product::selectRaw("products.*,(SUM(CASE WHEN product_order_details.type = 'D' AND product_order_details.status = 'onhand' AND product_order_details.owner = '" . $id . "' THEN product_order_details.quantity ELSE 0 END) - SUM(CASE WHEN product_order_details.type = 'C' AND product_order_details.status = 'onhand' AND product_order_details.owner = '" . $id . "' THEN product_order_details.quantity ELSE 0 END)) AS quantity_balance")
             ->leftjoin('product_order_details', 'product_order_details.products_id', '=', 'products.id')
             ->where('products.type', '=', 'single')
+            ->where('products.status', '=', 'show')
             ->groupBy('products.id')
             ->get();
 

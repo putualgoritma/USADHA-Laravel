@@ -11,7 +11,7 @@
             @csrf
             <div class="form-group {{ $errors->has('name') ? 'has-error' : '' }}">
                 <label for="name">{{ trans('global.activation_type.fields.name') }}*</label>
-                <input type="text" id="name" name="name" class="form-control" value="{{ old('name', '') }}" required>
+                <input type="text" id="name" name="name" class="form-control" value="{{ old('name', isset($activation_type) ? $activation_type->name : $name) }}" required>
                 @if($errors->has('name'))
                     <em class="invalid-feedback">
                         {{ $errors->first('name') }}
@@ -27,7 +27,6 @@
                 <select name="type" class="form-control">
                     <option value="user">user</option>
                     <option value="business">business</option>
-                    <option value="mercy">mercy</option>
                 </select>
                 @if($errors->has('type'))
                     <em class="invalid-feedback">
@@ -41,7 +40,7 @@
 
             <div class="form-group {{ $errors->has('bv_min') ? 'has-error' : '' }}">
                 <label for="bv_min">{{ trans('global.activation_type.fields.bv_min') }}*</label>
-                <input type="text" id="bv_min" name="bv_min" class="form-control" value="{{ old('bv_min', '') }}">
+                <input type="text" id="bv_min" name="bv_min" class="form-control" value="{{ old('bv_min', isset($activation_type) ? $activation_type->bv_min : '') }}">
                 @if($errors->has('bv_min'))
                     <em class="invalid-feedback">
                         {{ $errors->first('bv_min') }}
@@ -54,7 +53,7 @@
 
             <div class="form-group {{ $errors->has('bv_max') ? 'has-error' : '' }}">
                 <label for="bv_max">{{ trans('global.activation_type.fields.bv_max') }}*</label>
-                <input type="text" id="bv_max" bv_max="bv_max" class="form-control" value="{{ old('bv_max', '') }}">
+                <input type="text" id="bv_max" bv_max="bv_max" class="form-control" value="{{ old('bv_max', isset($activation_type) ? $activation_type->bv_max : '') }}">
                 @if($errors->has('bv_max'))
                     <em class="invalid-feedback">
                         {{ $errors->first('bv_max') }}

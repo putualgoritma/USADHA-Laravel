@@ -47,7 +47,12 @@ class MembersController extends Controller
         $code=acc_code_generate($last_code,8,3);
         $password=passw_gnr(7);
         $password_ency=bcrypt($password);
-        $data=array_merge($request->all(), ['type' => 'member','status' => 'pending','code' => $code,'password' => $password_ency,'parent_id' => $request->input('customers_id'),'ref_id' => $request->input('customers_id'),'ref_bin_id' => $request->input('customers_id')]);    
+        //get empty slot
+        $user = Member::where('id', $request->input('customers_id'))->first();
+        $slot_arr = array();
+        $get_slot_empty = $this->get_slot_empty($user->slot_x, $user->slot_y, 1, $slot_arr);
+        //set data
+        $data=array_merge($request->all(), ['type' => 'member','status' => 'pending','code' => $code,'password' => $password_ency,'parent_id' => $request->input('customers_id'),'ref_id' => $request->input('customers_id'),'ref_bin_id' => $request->input('customers_id'),'slot_x' => $get_slot_empty['ex'],'slot_y' => $get_slot_empty['ey']]);    
         
         //check ref_id
         $ref_row = Member::find($request->input('customers_id'));

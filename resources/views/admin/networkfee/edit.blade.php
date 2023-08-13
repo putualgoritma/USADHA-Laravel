@@ -208,6 +208,118 @@
                 </p>
             </div>
 
+            <div class="form-group {{ $errors->has('pointbv') ? 'has-error' : '' }}">
+                <label for="pointbv">{{ trans('global.networkfee.fields.pointbv') }}</label>
+                <input type="number" id="pointbv" name="pointbv" class="form-control" value="{{ old('pointbv', isset($networkfee) ? $networkfee->pointbv : '0') }}" step="1.00">
+                @if($errors->has('pointbv'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('pointbv') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.networkfee.fields.pointbv_helper') }}
+                </p>
+            </div>
+            <div class="form-group {{ $errors->has('deep_point') ? 'has-error' : '' }}">
+                <label for="deep_point">{{ trans('global.networkfee.fields.deep_point') }}</label>
+                <input type="number" id="deep_point" name="deep_point" class="form-control" value="{{ old('deep_point', isset($networkfee) ? $networkfee->deep_point : '0') }}" step="1">
+                @if($errors->has('deep_point'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('deep_point') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.networkfee.fields.deep_point_helper') }}
+                </p>
+            </div>
+
+            <div class="form-group {{ $errors->has('levelingbv') ? 'has-error' : '' }}">
+                <label for="levelingbv">{{ trans('global.networkfee.fields.levelingbv') }}</label>
+                <input type="number" id="levelingbv" name="levelingbv" class="form-control" value="{{ old('levelingbv', isset($networkfee) ? $networkfee->levelingbv : '0') }}" step="1.00">
+                @if($errors->has('levelingbv'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('levelingbv') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.networkfee.fields.levelingbv_helper') }}
+                </p>
+            </div>
+
+            <div class="form-group {{ $errors->has('genbv') ? 'has-error' : '' }}">
+                <label for="genbv">{{ trans('global.networkfee.fields.genbv') }}</label>
+                <input type="number" id="genbv" name="genbv" class="form-control" value="{{ old('genbv', isset($networkfee) ? $networkfee->genbv : '0') }}" step="1.00">
+                @if($errors->has('genbv'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('genbv') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.networkfee.fields.genbv_helper') }}
+                </p>
+            </div>
+
+            <div class="form-group {{ $errors->has('gen1') ? 'has-error' : '' }}">
+                <label for="gen1">{{ trans('global.networkfee.fields.gen1') }}</label>
+                <input type="number" id="gen1" name="gen1" class="form-control" value="{{ old('gen1', isset($networkfee) ? $networkfee->gen1 : '0') }}" step="1.00">
+                @if($errors->has('gen1'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('gen1') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.networkfee.fields.gen1_helper') }}
+                </p>
+            </div>
+            <div class="form-group {{ $errors->has('gen2') ? 'has-error' : '' }}">
+                <label for="gen2">{{ trans('global.networkfee.fields.gen2') }}</label>
+                <input type="number" id="gen2" name="gen2" class="form-control" value="{{ old('gen2', isset($networkfee) ? $networkfee->gen2 : '0') }}" step="1.00">
+                @if($errors->has('gen2'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('gen2') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.networkfee.fields.gen2_helper') }}
+                </p>
+            </div>
+            <div class="form-group {{ $errors->has('gen3') ? 'has-error' : '' }}">
+                <label for="gen3">{{ trans('global.networkfee.fields.gen3') }}</label>
+                <input type="number" id="gen3" name="gen3" class="form-control" value="{{ old('gen3', isset($networkfee) ? $networkfee->gen3 : '0') }}" step="1.00">
+                @if($errors->has('gen3'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('gen3') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.networkfee.fields.gen3_helper') }}
+                </p>
+            </div>
+            <div class="form-group {{ $errors->has('gen4') ? 'has-error' : '' }}">
+                <label for="gen4">{{ trans('global.networkfee.fields.gen4') }}</label>
+                <input type="number" id="gen4" name="gen4" class="form-control" value="{{ old('gen4', isset($networkfee) ? $networkfee->gen4 : '0') }}" step="1.00">
+                @if($errors->has('gen4'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('gen4') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.networkfee.fields.gen4_helper') }}
+                </p>
+            </div>
+            <div class="form-group {{ $errors->has('gen5') ? 'has-error' : '' }}">
+                <label for="gen5">{{ trans('global.networkfee.fields.gen5') }}</label>
+                <input type="number" id="gen5" name="gen5" class="form-control" value="{{ old('gen5', isset($networkfee) ? $networkfee->gen5 : '0') }}" step="1.00">
+                @if($errors->has('gen5'))
+                    <em class="invalid-feedback">
+                        {{ $errors->first('gen5') }}
+                    </em>
+                @endif
+                <p class="helper-block">
+                    {{ trans('global.networkfee.fields.gen5_helper') }}
+                </p>
+            </div>
+
             <div>
                 <input class="btn btn-danger" type="submit" value="{{ trans('global.save') }}">
             </div>

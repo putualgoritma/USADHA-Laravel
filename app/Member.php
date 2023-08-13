@@ -36,6 +36,8 @@ class Member extends Model
         'activation_type_id',
         'activation_at',
         'ref_bin_id',
+        'slot_x',
+        'slot_y',
     ];
 
     public function scopeFilterInput($query)

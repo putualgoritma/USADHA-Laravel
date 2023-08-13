@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Activation;
 use App\City;
 use App\CustomerApi;
+use App\Events\MemberActivated;
 use App\Http\Controllers\Controller;
 use App\Ledger;
 use App\LogNotif;
@@ -16,9 +17,11 @@ use App\Order;
 use App\OrderDetails;
 use App\OrderPoint;
 use App\Package;
+use App\PairingInfo;
 use App\Product;
 use App\Province;
-use App\Traits\TraitModel;
+use App\Tokensale;
+use App\Traits\TraitOrderFee;
 use Auth;
 use Berkayk\OneSignal\OneSignalClient;
 use Hashids;
@@ -28,12 +31,11 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use OneSignal;
 use Validator;
-use App\Jobs\ProcessPairing;
 
 class CustomersApiController extends Controller
 {
 
-    use TraitModel;
+    use TraitOrderFee;
     private $onesignal_client;
 
     public function __construct()
@@ -41,28 +43,184 @@ class CustomersApiController extends Controller
         $this->onesignal_client = new OneSignalClient(env('ONESIGNAL_APP_ID_MEMBER'), env('ONESIGNAL_REST_API_KEY_MEMBER'), '');
     }
 
+    public function testPairing(Request $request)
+    {
+        $testPairing = $this->test_pairing_bin($request->order_id, $request->customer_id, $request->bv_amount_inc, $request->points_fee_id);
+    }
+
+    public function getAutoMaintain(Request $request)
+    {
+        $auto_maintain_bv = $this->career_type($request->customer_id);
+
+        return response()->json([
+            'success' => true,
+            'data' => $auto_maintain_bv,
+        ]);
+    }
+
+    public function statusListUp(Request $request)
+    {
+        $status_list_upline = $this->status_list_upline($request->slot_x, $request->slot_y);
+
+        return response()->json([
+            'success' => true,
+            'data' => $status_list_upline,
+        ]);
+    }
+
+    public function pairing_info(Request $request)
+    {
+        //BVPO
+        $bvpo_row = NetworkFee::select('*')
+            ->Where('code', '=', 'BVPO')
+            ->first();
+        //
+        $bv_queue = $this->get_bv_queue($request->id);
+        $bv_pairing_r = ($bv_queue['r'] - $bv_queue['c']) / $bvpo_row->amount;
+        $bv_pairing_l = ($bv_queue['l'] - $bv_queue['c']) / $bvpo_row->amount;
+        $bv_queue_c = $bv_queue['c'] / $bvpo_row->amount;
+        $bv_queue_c_count = $bv_queue['c_count'];
+        $reg_today = date('Y-m-d');
+        $get_bv_daily_queue = $this->get_bv_daily_queue($request->id, $reg_today) / $bvpo_row->amount;
+        return response()->json([
+            'success' => true,
+            'bv_pairing_r' => $bv_pairing_r,
+            'bv_pairing_l' => $bv_pairing_l,
+            'bv_queue_c' => $bv_queue_c,
+            'bv_queue_c_count' => $bv_queue_c_count,
+            'get_bv_daily_queue' => $get_bv_daily_queue,
+        ]);
+    }
+
+    public function net_info(Request $request)
+    {
+        $member = CustomerApi::find($request->id);
+        $downline_ref = CustomerApi::select('id')
+            ->where('ref_bin_id', $request->id)
+            ->where('type', '=', 'member')
+            ->where('status', '=', 'active')
+            ->get();
+        //get total level
+        $get_level_total = $this->get_level_total($member->slot_x, $member->slot_y, 1, 0);
+        //get left and right child
+        $slot_selected_x = $member->slot_x + 1;
+        $slot_selected_y_left = ($member->slot_y * 2) - 1;
+        $slot_selected_y_right = ($member->slot_y * 2);
+        $downline_left = CustomerApi::select('id')
+            ->where('ref_bin_id', '>', 0)
+            ->where('type', '=', 'member')
+            ->where('slot_x', '=', $slot_selected_x)
+            ->where('slot_y', $slot_selected_y_left)
+            ->first();
+        $downline_right = CustomerApi::select('id')
+            ->where('ref_bin_id', '>', 0)
+            ->where('type', '=', 'member')
+            ->where('slot_x', '=', $slot_selected_x)
+            ->where('slot_y', $slot_selected_y_right)
+            ->first();
+
+        $downline_left_total = 0;
+        if ($downline_left) {
+            $downline_left_total = $this->get_downline_total($slot_selected_x, $slot_selected_y_left, 1, 0) + 1;
+        }
+        $downline_right_total = 0;
+        if ($downline_right) {
+            $downline_right_total = $this->get_downline_total($slot_selected_x, $slot_selected_y_right, 1, 0) + 1;
+        }
+
+        return response()->json([
+            'success' => true,
+            'right_total' => $downline_right_total,
+            'left_total' => $downline_left_total,
+            'level_total' => $get_level_total,
+            'ref_total' => count($downline_ref),
+        ]);
+    }
+
+    public function groupLRAmount(Request $request)
+    {
+        $pairing_bin = $this->pairing_bin($request->order_id, $request->customer_id, $request->bv_amount_inc, $request->points_fee_id);
+
+        return response()->json([
+            'success' => true,
+            'data' => $pairing_bin,
+        ]);
+    }
+
+    public function slotListUp(Request $request)
+    {
+        $list_upline = $this->get_list_upline($request->slot_x, $request->slot_y);
+
+        return response()->json([
+            'success' => true,
+            'data' => $list_upline,
+        ]);
+    }
+
+    public function slotIfLR(Request $request)
+    {
+        $if_lr = $this->group_if_lr($request->group_slot_x, $request->group_slot_y, $request->slot_x, $request->slot_y);
+        $status = 'l';
+        if ($if_lr['y'] % 2 == 0) {
+            $status = 'r';
+        }
+        return response()->json([
+            'success' => true,
+            'x' => $if_lr['x'],
+            'y' => $if_lr['y'],
+            'status' => $status,
+        ]);
+    }
+
+    public function slotEmpty(Request $request)
+    {
+        //get x & y referal
+        $user = CustomerApi::where('id', $request->id)->first();
+        $slot_arr = array();
+        $get_slot_empty = $this->get_slot_empty($user->slot_x, $user->slot_y, 1, $slot_arr);
+        return response()->json([
+            'success' => true,
+            'parent' => $get_slot_empty,
+        ]);
+    }
+
     public function slotTree(Request $request)
     {
         $slot_prev_x = -1;
         $slot_prev_y = -1;
-        $user = auth()->user();
-        if ($request->slot_x) {
-            $slot_init_x = $request->slot_x;
-            $slot_init_y = $request->slot_y;
+        $user = CustomerApi::where('id', $request->id)->first();
+
+        if ($request->has('slot_x') && $request->has('slot_x') != null) {
+            if ($request->status == '0') {
+                $yu = 1;
+                $slot_arr = array();
+                if ($request->type_hu == 3) {
+                    $get_slot_empty = $this->get_slot_empty_3hu($request->slot_x, $request->slot_y, 1, $slot_arr);
+                } else {
+                    $get_slot_empty = $this->get_slot_empty($request->slot_x, $request->slot_y, 1, $slot_arr);
+                }
+                $slot_init_x = $get_slot_empty['x'];
+                $slot_init_y = $get_slot_empty['y'];
+            } else {
+                $yu = 2;
+                $slot_init_x = $request->slot_x;
+                $slot_init_y = $request->slot_y;
+            }
             if ($slot_init_x > $user->slot_x) {
-                $slot_prev_x = $slot_init_x - 3;
+                $slot_prev_x = $slot_init_x - 1;
                 $slot_prev_y = ceil($slot_init_y / 2);
-                $slot_prev_y = ceil($slot_prev_y / 2);
-                $slot_prev_y = ceil($slot_prev_y / 2);
+                //$slot_prev_y = ceil($slot_prev_y / 2);
+                //$slot_prev_y = ceil($slot_prev_y / 2);
             }
         } else {
+            $yu = 3;
             $slot_init_x = $user->slot_x;
             $slot_init_y = $user->slot_y;
         }
         $slot_arr = array();
         $slot_arr[0][0]['x'] = $slot_init_x;
         $slot_arr[0][0]['y'] = $slot_init_y;
-        $slot_customer = CustomerApi::select('id', 'activation_type_id', 'code', 'name', 'status')->where("slot_x", $slot_init_x)->where("slot_y", $slot_init_y)->with('activations')->first();
+        $slot_customer = CustomerApi::select('id', 'activation_type_id', 'code', 'name', 'status', 'slot_x', 'slot_y')->where("slot_x", $slot_init_x)->where("slot_y", $slot_init_y)->with('activations')->first();
         if ($slot_customer) {
             $slot_arr[0][0]['data'] = $slot_customer;
             $top_id = $slot_customer->id;
@@ -73,7 +231,7 @@ class CustomersApiController extends Controller
         for ($i = 1; $i <= 3; $i++) {
             $slot_arr[$i][0]['x'] = $slot_arr[$i - 1][0]['x'] + 1;
             $slot_arr[$i][0]['y'] = ($slot_arr[$i - 1][0]['y'] * 2) - 1;
-            $slot_customer = CustomerApi::select('activation_type_id', 'code', 'name', 'status')->where("slot_x", $slot_arr[$i][0]['x'])->where("slot_y", $slot_arr[$i][0]['y'])->with('activations')->first();
+            $slot_customer = CustomerApi::select('id', 'activation_type_id', 'code', 'name', 'status', 'slot_x', 'slot_y')->where("slot_x", $slot_arr[$i][0]['x'])->where("slot_y", $slot_arr[$i][0]['y'])->with('activations')->first();
             if ($slot_customer) {
                 $slot_arr[$i][0]['data'] = $slot_customer;
             } else {
@@ -82,7 +240,7 @@ class CustomersApiController extends Controller
             for ($j = 1; $j < pow(2, $i); $j++) {
                 $slot_arr[$i][$j]['x'] = $slot_arr[$i][$j - 1]['x'];
                 $slot_arr[$i][$j]['y'] = ($slot_arr[$i][$j - 1]['y']) + 1;
-                $slot_customer = CustomerApi::select('activation_type_id', 'code', 'name', 'status')->where("slot_x", $slot_arr[$i][$j]['x'])->where("slot_y", $slot_arr[$i][$j]['y'])->with('activations')->first();
+                $slot_customer = CustomerApi::select('id', 'activation_type_id', 'code', 'name', 'status', 'slot_x', 'slot_y')->where("slot_x", $slot_arr[$i][$j]['x'])->where("slot_y", $slot_arr[$i][$j]['y'])->with('activations')->first();
                 if ($slot_customer) {
                     $slot_arr[$i][$j]['data'] = $slot_customer;
                 } else {
@@ -90,9 +248,60 @@ class CustomersApiController extends Controller
                 }
             }
         }
-        return view('admin.reposisi.tree', compact('slot_arr', 'top_id', 'slot_prev_x', 'slot_prev_y'));
+        return response()->json([
+            'success' => true,
+            'slots' => $slot_arr,
+            'prev_x' => $slot_prev_x,
+            'prev_y' => $slot_prev_y,
+            'status' => $yu,
+        ]);
     }
-    
+
+    public function loginSwitch()
+    {
+        $user = CustomerApi::where('id', request('id'))
+            ->where('type', 'member')
+            ->where('status', '!=', 'close')
+            ->with(['activations', 'refferal', 'provinces', 'city'])
+            ->first();
+        if (!empty($user)) {
+            $user->ref_link = "https://admin.belogherbal.com/member?ref=" . Hashids::encode($user->id);
+            return response()->json([
+                'success' => true,
+                'user' => $user,
+            ]);
+        } else {
+            $message = 'Email & Password yang Anda masukkan salah. Salah memasukkan Email & Password lebih dari 3x maka Account akan otomatis di blokir.';
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+            ], 401);
+        }
+    }
+
+    public function membersHu(Request $request)
+    {
+        try {
+            if ($request->exc != '') {
+                $members = CustomerApi::select('*')->where('owner_id', $request->owner_id)->where('ref_bin_id', '>', 0)->where('id', '!=', $request->exc)->get();
+            } else {
+                $members = CustomerApi::select('*')->where('owner_id', $request->owner_id)->where('ref_bin_id', '>', 0)->get();
+            }
+            $owner = CustomerApi::select('*')->where('id', $request->owner_id)->first();
+        } catch (QueryException $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data Kosong.',
+            ], 401);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $members,
+            'owner' => $owner,
+        ]);
+    }
+
     public function logsUpdate($id)
     {
         $logs = LogNotif::find($id);
@@ -221,7 +430,36 @@ class CustomersApiController extends Controller
     {
         try {
             if (isset($request->page)) {
-                $members = CustomerApi::select('*')->FilterInput()
+                $members = CustomerApi::select('*')->FilterInput()->where('status', '!=', 'closed')->where(function ($qry) {
+                    $qry->where('ref_bin_id', '>', 0)
+                        ->orWhere('type', 'agent');
+                })
+                    ->paginate(10, ['*'], 'page', $request->page);
+            } else {
+                $members = CustomerApi::select('*')->where('status', '!=', 'closed')->where('ref_bin_id', '>', 0)->where(function ($qry) {
+                    $qry->where('ref_bin_id', '>', 0)
+                        ->orWhere('type', 'agent');
+                })
+                    ->get();
+            }
+        } catch (QueryException $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data Kosong.',
+            ], 401);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $members,
+        ]);
+    }
+
+    public function agentlist(Request $request)
+    {
+        try {
+            if (isset($request->page)) {
+                $members = CustomerApi::select('*')->where('type', 'agent')->where('status', 'active')->FilterInput()
                     ->paginate(10, ['*'], 'page', $request->page);
             } else {
                 $members = CustomerApi::select('*')
@@ -244,7 +482,7 @@ class CustomersApiController extends Controller
     {
         try {
             $down_arr = array();
-            $data = $this->downline_tree($request->ref_id, $down_arr);
+            $data = $this->downline_tree($request->ref_bin_id, $down_arr);
             return response()->json([
                 'success' => true,
                 'data' => $data,
@@ -293,9 +531,30 @@ class CustomersApiController extends Controller
         ]);
     }
 
-    public function downline($id)
+    public function downlineAgent($id)
     {
         $user = CustomerApi::where('ref_id', $id)
+            ->where('status', 'active')
+            ->with('activations')
+            ->with('refferal')
+            ->orderBy('activation_at', 'ASC')
+            ->get();
+        if (!empty($user)) {
+            return response()->json([
+                'success' => true,
+                'data' => $user,
+            ]);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data is empty.',
+            ], 401);
+        }
+    }
+
+    public function downline($id)
+    {
+        $user = CustomerApi::where('ref_bin_id', $id)
             ->where('status', 'active')
             ->with('activations')
             ->with('refferal')
@@ -364,10 +623,18 @@ class CustomersApiController extends Controller
                 $success['token'] = Auth::user()->createToken('authToken')->accessToken;
                 //After successfull authentication, notice how I return json parameters
                 $user->ref_link = "https://admin.belogherbal.com/member?ref=" . Hashids::encode($user->id);
+                //get child
+                $users_hu = CustomerApi::select('*')->where('owner_id', $user->id)->where('ref_bin_id', '>', 0)->get();
+                $hu = count($users_hu);
+                //get status upline
+                $status_list_upline = $this->status_list_upline($user->slot_x, $user->slot_y);
+                //return
                 return response()->json([
                     'success' => true,
                     'token' => $success,
                     'user' => $user,
+                    'hu' => $hu,
+                    'status_up' => $status_list_upline,
                 ]);
             } else {
                 //if authentication is unsuccessfull, notice how I return json parameters
@@ -395,7 +662,7 @@ class CustomersApiController extends Controller
             ->where('type', 'agent')
             ->with(['provinces', 'city'])
             ->first();
-        if ((Hash::check(request('password'), $user->password)) && ($user->status_block == 0)) {
+        if ($user && ((Hash::check(request('password'), $user->password)) && ($user->status_block == 0))) {
             Auth::login($user);
             if (request('id_onesignal') != null) {
                 $user->id_onesignal = request('id_onesignal');
@@ -411,7 +678,7 @@ class CustomersApiController extends Controller
         } else {
             //if authentication is unsuccessfull, notice how I return json parameters
             $message = 'Email & Password yang Anda masukkan salah. Salah memasukkan Email & Password lebih dari 3x maka Account akan otomatis di blokir.';
-            if ($user->status_block == 1) {
+            if ($user && ($user->status_block == 1)) {
                 $message = 'Your Account is temporary blocked.';
             }
             return response()->json([
@@ -557,10 +824,11 @@ class CustomersApiController extends Controller
             $parent_id = $this->set_parent($referals_id);
             $input['parent_id'] = $parent_id;
             $input['ref_id'] = $referals_id;
+            $input['ref_bin_id'] = $referals_id;
         }
 
         //check ref_id
-        $ref_row = Member::find($input['ref_id']);
+        $ref_row = Member::find($input['ref_bin_id']);
         if ($ref_row->status != 'active') {
             return response()->json([
                 'success' => false,
@@ -590,327 +858,347 @@ class CustomersApiController extends Controller
 
     public function registerDownlineCustPackage(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required',
-            //'phone' => 'required|unique:customers|regex:/(0)[0-9]{10}/',
-            'phone' => 'required',
-            //'email' => 'required|email|unique:customers',
-            'email' => 'required|email',
-            'password' => 'required',
-            'register' => 'required',
-            'address' => 'required',
-            'ref_id' => 'required',
-            'agents_id' => 'required',
-        ]);
-        if ($validator->fails()) {
+        if (env('MEMBER_ACTIV') == 0) {
             return response()->json([
                 'success' => false,
-                'message' => $validator->errors(),
+                'message' => 'Register Gagal, Status Activasi Dinonaktifkan Untuk Beberapa Waktu.',
             ], 401);
-        }
-
-        //check ref_id
-        $ref_row = Member::find($request->ref_id);
-        if ($ref_row->status != 'active') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Register Gagal, Status Referal belum Activasi.',
-            ], 401);
-        }
-
-        //if sponsor is set
-        $sponsor_id = $request->ref_id;
-        if (isset($request->sponsor_id) && $request->sponsor_id > 0) {
-            $sponsor_id = $request->sponsor_id;
-        }
-
-        /* point balance */
-        //get point referal
-        $points_id = 1;
-        $points_upg_id = 2;
-        $points_fee_id = 4;
-        $points_debit = OrderPoint::where('customers_id', '=', $sponsor_id)
-            ->where('type', '=', 'D')
-            ->where('status', '=', 'onhand')
-            ->where('points_id', '=', 1)
-            ->sum('amount');
-        $points_credit = OrderPoint::where('customers_id', '=', $sponsor_id)
-            ->where('type', '=', 'C')
-            ->where('status', '=', 'onhand')
-            ->where('points_id', '=', 1)
-            ->sum('amount');
-        $points_balance = $points_debit - $points_credit;
-
-        //get package price & cogs
-        $total = 0;
-        $cogs_total = 0;
-        $bv_total = 0;
-        $profit_total = 0;
-        $cart_arr = $request->cart['item'];
-        $count_cart = count($cart_arr);
-        for ($i = 0; $i < $count_cart; $i++) {
-            $total += $cart_arr[$i]['qty'] * $cart_arr[$i]['harga'];
-            $product = Product::find($cart_arr[$i]['id']);
-            $cogs_total += $cart_arr[$i]['qty'] * $product->cogs;
-            $bv_total += $cart_arr[$i]['qty'] * $product->bv;
-            $profit_total += $cart_arr[$i]['qty'] * $product->profit;
-        }
-        $package_activation_type_id = $request->activationtype;
-        $profit = $total - $cogs_total;
-
-        if ($points_balance >= $total) {
-            $input = $request->all();
-            $last_code = $this->mbr_get_last_code();
-            $code = acc_code_generate($last_code, 8, 3);
-            $password_raw = $input['password'];
-            $input['password'] = bcrypt($input['password']);
-            $input['code'] = $code;
-            $input['type'] = 'member';
-            $input['status'] = 'pending';
-            $parent_id = $this->set_parent($input['ref_id']);
-            $input['parent_id'] = $parent_id;
-
-            try {
-                $user = CustomerApi::create($input);
-                $member = $user;
-            } catch (QueryException $exception) {
+        } else {
+            $validator = Validator::make($request->all(), [
+                'name' => 'required',
+                'phone' => 'required|unique:customers',
+                //'phone' => 'required',
+                'email' => 'required|email|unique:customers',
+                //'email' => 'required|email',
+                'password' => 'required',
+                'register' => 'required',
+                'address' => 'required',
+                'ref_id' => 'required',
+                'agents_id' => 'required',
+            ]);
+            if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Duplicate Email or Phone Number.',
+                    'message' => $validator->errors(),
                 ], 401);
             }
 
-            //init
-            $register = $request->input('register');
-            $memo = 'Aktivasi Member ' . $member->code . "-" . $member->name;
-            /* proceed ledger */
-            $data = ['register' => $register, 'title' => $memo, 'memo' => $memo, 'status' => 'pending'];
-            $ledger = Ledger::create($data);
-            $ledger_id = $ledger->id;
-            //set ledger entry arr
-            //get cashback 01
-            //CBA 1
-            $networkfee1_row = NetworkFee::select('*')
-                ->Where('code', '=', 'CBA01')
-                ->get();
-            $cba1 = (($networkfee1_row[0]->amount) / 100) * $total;
-            //chech if agent has referal
-            $cbmart = 0;
-            //CBA 2
-            $networkfee2_row = NetworkFee::select('*')
-                ->Where('code', '=', 'CBA02')
-                ->get();
-            $cba2 = (($networkfee2_row[0]->amount) / 100) * $total;
-            $agent_row = Member::find($request->input('agents_id'));
-            // if ($agent_row->ref_id > 0) {
-            //     //CB Mart
-            //     $cbmart_row = NetworkFee::select('*')
-            //         ->Where('code', '=', 'CBMART')
-            //         ->get();
-            //     $cbmart = (($cbmart_row[0]->amount) / 100) * $total;
-            //     $cba2 = (($networkfee2_row[0]->amount - $cbmart_row[0]->amount) / 100) * $total;
+            //check ref_id
+            $ref_row = Member::find($request->ref_id);
+            if ($ref_row->status != 'active') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Register Gagal, Status Referal belum Activasi.',
+                ], 401);
+            }
+
+            //check up status
+            // $status_list_upline = $this->status_list_upline($request->slot_x, $request->slot_y);
+            // if ($status_list_upline['status'] == 0) {
+            //     return response()->json([
+            //         'success' => false,
+            //         'message' => 'Register Gagal, Status Upline masih ada yang belum activ.',
+            //     ], 401);
             // }
-            //network fee package activation
-            $package_network_row = NetworkFee::select('*')
-                ->Where('type', '=', 'activation')
-                ->Where('activation_type_id', '=', $package_activation_type_id)
-                ->get();
-            //BVCV
-            $bvcv_row = NetworkFee::select('*')
-                ->Where('code', '=', 'BVCV')
-                ->get();
-            //BVPO
-            $bvpo_row = NetworkFee::select('*')
-                ->Where('code', '=', 'BVPO')
-                ->get();
-            $bvcv = (($bvcv_row[0]->amount) / 100) * $bv_total;
-            $bv_nett = $bv_total - $bvcv;
 
-            //package activation type
-            $package_activation_row = Activation::select('type', 'bv_min', 'bv_max')
-                ->Where('id', '=', $package_activation_type_id)
-                ->get();
-            //get BV (min platinum)
-            $min_plat_row = Activation::select('bv_min', 'bv_max')
-                ->Where('id', '=', 4)
-                ->first();
-            $min_plat = $min_plat_row->bv_min * $bvpo_row[0]->amount;
-            //package referal fee
-            //ref 1 package fee
-            $sbv_percen = $package_network_row[0]->sbv;
-            $rsbv_g1_percen = $package_network_row[0]->rsbv_g1;
-            $ref1_fee_point_sale_def = ($rsbv_g1_percen / 100) * ($sbv_percen / 100) * $bv_nett;
-            if (($bv_nett > $min_plat) && $package_activation_type_id < 4) {
-                $ref1_fee_point_sale_def = ($rsbv_g1_percen / 100) * ($sbv_percen / 100) * $min_plat;
-            }
-            //ref 2 package fee
-            $sbv_percen = $package_network_row[0]->sbv;
-            $rsbv_g2_percen = $package_network_row[0]->rsbv_g2;
-            $ref2_fee_point_sale_def = ($rsbv_g2_percen / 100) * ($sbv_percen / 100) * $bv_nett;
-            if (($bv_nett > $min_plat) && $package_activation_type_id < 4) {
-                $ref2_fee_point_sale_def = ($rsbv_g2_percen / 100) * ($sbv_percen / 100) * $min_plat;
+            //if sponsor is set
+            $sponsor_id = $request->ref_id;
+            if (isset($request->sponsor_id) && $request->sponsor_id > 0) {
+                $sponsor_id = $request->sponsor_id;
             }
 
-            //ref 1
-            $ref1_fee_point_sale = 0;
-            $ref1_fee_point_upgrade = 0;
-            $ref1_flush_out = 0;
-            $ref1_row = Member::find($member->ref_id);
-            //ref 1 row
-            if (!empty($ref1_row) && $ref1_row->ref_id > 0) {
-                $ref1_fee_row = NetworkFee::select('*')
-                    ->Where('type', '=', 'activation')
-                    ->Where('activation_type_id', '=', $ref1_row->activation_type_id)
+            /* point balance */
+            //get point referal
+            $points_id = 1;
+            $points_upg_id = 2;
+            $points_fee_id = 4;
+            $points_balance = $this->points_member_balance_get($sponsor_id);
+
+            //get package price & cogs
+            $package_cogs_get = $this->package_cogs_get($request->cart['item']);
+            $total = $package_cogs_get->total;
+            $cogs_total = $package_cogs_get->cogs_total;
+            $bv_total = $package_cogs_get->bv_total;
+            $package_activation_type_id = $request->activationtype;
+            $profit = $total - $cogs_total;
+
+            //get stock agent, loop package
+            $stock_status = $this->stock_agent_status($request->cart['item'], $request->input('agents_id'));
+
+            if (($points_balance >= $total || $request->tokensale != '') && $stock_status == 'true') {
+                $input = $request->all();
+                $last_code = $this->mbr_get_last_code();
+                $code = acc_code_generate($last_code, 8, 3);
+                $password_raw = $input['password'];
+                $input['password'] = bcrypt($input['password']);
+                $input['code'] = $code;
+                $input['type'] = 'member';
+                $input['status'] = 'pending';
+                $parent_id = $this->set_parent($input['ref_id']);
+                $input['parent_id'] = $parent_id;
+
+                $input['ref_bin_id'] = $input['ref_id'];
+                $input['slot_x'] = $input['slot_x'];
+                $input['slot_y'] = $input['slot_y'];
+
+                try {
+                    $user = CustomerApi::create($input);
+                    $member = $user;
+                    //check if 3 HU
+                    if ($input['type_hu'] == 3) {
+                        //get slot HU
+                        $slot_left_x = $input['slot_x'] + 1;
+                        $slot_right_x = $input['slot_x'] + 1;
+                        $slot_left_y = ($input['slot_y'] * 2) - 1;
+                        $slot_right_y = $input['slot_y'] * 2;
+                        //register L HU
+                        $last_code = $this->mbr_get_last_code();
+                        $code = acc_code_generate($last_code, 8, 3);
+                        $data = ['register' => $input['register'], 'name' => $input['name'] . "-002", 'activation_type_id' => 2, 'type' => 'member', 'status' => 'pending', 'code' => $code, 'parent_id' => $member->id, 'ref_id' => $input['ref_id'], 'owner_id' => $member->id, 'ref_bin_id' => $input['ref_id'], 'slot_x' => $slot_left_x, 'slot_y' => $slot_left_y];
+                        $hu_l = CustomerApi::create($data);
+                        //register R HU
+                        $last_code = $this->mbr_get_last_code();
+                        $code = acc_code_generate($last_code, 8, 3);
+                        $data = ['register' => $input['register'], 'name' => $input['name'] . "-003", 'activation_type_id' => 2, 'type' => 'member', 'status' => 'pending', 'code' => $code, 'parent_id' => $member->id, 'ref_id' => $input['ref_id'], 'owner_id' => $member->id, 'ref_bin_id' => $input['ref_id'], 'slot_x' => $slot_right_x, 'slot_y' => $slot_right_y];
+                        $hu_r = CustomerApi::create($data);
+                    }
+                } catch (QueryException $exception) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Duplicate Email or Phone Number.',
+                    ], 401);
+                }
+
+                //init
+                $register = $request->input('register');
+                $memo = 'Aktivasi Member ' . $member->code . "-" . $member->name;
+                /* proceed ledger */
+                $data = ['register' => $register, 'title' => $memo, 'memo' => $memo, 'status' => 'pending'];
+                $ledger = Ledger::create($data);
+                $ledger_id = $ledger->id;
+                //set ledger entry arr
+                //cashback agent
+                $cashback_agent_get = $this->cashback_agent_get($total);
+                $cba1 = $cashback_agent_get->cba1;
+                $cbmart = $cashback_agent_get->cbmart;
+                $cba2 = $cashback_agent_get->cba2;
+
+                $bv_nett = $package_cogs_get->bv_nett;
+
+                //package activation type
+                $package_activation_row = Activation::select('type', 'bv_min', 'bv_max')
+                    ->Where('id', '=', $package_activation_type_id)
                     ->get();
-                $sbv1_percen = $ref1_fee_row[0]->sbv;
-                $rsbv_g1_percen = $ref1_fee_row[0]->rsbv_g1;
-                $ref1_fee_point_sale = ($rsbv_g1_percen / 100) * ($sbv1_percen / 100) * $bv_nett;
-                if (($bv_nett > $min_plat) && $ref1_row->activation_type_id < 4) {
-                    $ref1_fee_point_sale = ($rsbv_g1_percen / 100) * ($sbv1_percen / 100) * $min_plat;
+                //get BV (min platinum)
+                $min_plat_row = Activation::select('bv_min', 'bv_max')
+                    ->Where('id', '=', 4)
+                    ->first();
+                $min_plat = $min_plat_row->bv_min * $bvpo_row[0]->amount;
+                //package referal fee
+                //ref 1 package fee
+                $sbv_percen = $package_network_row[0]->sbv;
+                $rsbv_g1_percen = $package_network_row[0]->rsbv_g1;
+                $ref1_fee_point_sale_def = ($rsbv_g1_percen / 100) * ($sbv_percen / 100) * $bv_nett;
+                if (($bv_nett > $min_plat) && $package_activation_type_id < 4) {
+                    $ref1_fee_point_sale_def = ($rsbv_g1_percen / 100) * ($sbv_percen / 100) * $min_plat;
                 }
-                if ($ref1_fee_point_sale_def > $ref1_fee_point_sale) {
-                    $ref1_flush_out = $ref1_fee_point_sale_def - $ref1_fee_point_sale;
-                }
-            }
+                // //ref 2 package fee
+                // $sbv_percen = $package_network_row[0]->sbv;
+                // $rsbv_g2_percen = $package_network_row[0]->rsbv_g2;
+                // $ref2_fee_point_sale_def = ($rsbv_g2_percen / 100) * ($sbv_percen / 100) * $bv_nett;
+                // if (($bv_nett > $min_plat) && $package_activation_type_id < 4) {
+                //     $ref2_fee_point_sale_def = ($rsbv_g2_percen / 100) * ($sbv_percen / 100) * $min_plat;
+                // }
 
-            //ref 2
-            $ref2_fee_point_sale = 0;
-            $ref2_fee_point_upgrade = 0;
-            $member_get_flush_out = 0;
-            $ref2_row = Member::find($ref1_row->ref_id);
-            //ref 2 row
-            if (!empty($ref2_row) && $ref2_row->ref_id > 0) {
-                $ref2_fee_row = NetworkFee::select('*')
-                    ->Where('type', '=', 'activation')
-                    ->Where('activation_type_id', '=', $ref2_row->activation_type_id)
-                    ->get();
-                $sbv2_percen = $ref2_fee_row[0]->sbv;
-                $rsbv_g2_percen = $ref2_fee_row[0]->rsbv_g2;
-                $ref2_fee_point_sale = ($rsbv_g2_percen / 100) * ($sbv2_percen / 100) * $bv_nett;
-                if (($bv_nett > $min_plat) && $ref2_row->activation_type_id < 4) {
-                    $ref2_fee_point_sale = ($rsbv_g2_percen / 100) * ($sbv2_percen / 100) * $min_plat;
-                }
-                $member_get_flush_out = $ref2_row->id;
-                if ($ref1_row->activation_type_id >= $ref2_row->activation_type_id) {
-                    $member_get_flush_out = 0;
-                }
-            }
-            if ($member_get_flush_out == 0) {
+                //ref 1
+                $ref1_fee_point_sale = 0;
+                $ref1_fee_point_upgrade = 0;
                 $ref1_flush_out = 0;
-            }
+                $ref1_row = Member::find($member->ref_bin_id);
+                //ref 1 row
+                if (!empty($ref1_row) && $ref1_row->ref_bin_id > 1) {
+                    $ref1_fee_row = NetworkFee::select('*')
+                        ->Where('type', '=', 'activation')
+                        ->Where('activation_type_id', '=', $ref1_row->activation_type_id)
+                        ->get();
+                    $sbv1_percen = $ref1_fee_row[0]->sbv;
+                    $rsbv_g1_percen = $ref1_fee_row[0]->rsbv_g1;
+                    $ref1_fee_point_sale = ($rsbv_g1_percen / 100) * ($sbv1_percen / 100) * $bv_nett;
+                    if (($bv_nett > $min_plat) && $ref1_row->activation_type_id < 4) {
+                        //$ref1_fee_point_sale = ($rsbv_g1_percen / 100) * ($sbv1_percen / 100) * $min_plat;
+                    }
+                    if ($ref1_fee_point_sale_def > $ref1_fee_point_sale) {
+                        //$ref1_flush_out = $ref1_fee_point_sale_def - $ref1_fee_point_sale;
+                    }
+                }
 
-            //set order
-            $warehouses_id = 1;
-            $last_code = $this->get_last_code('order-agent');
-            $order_code = acc_code_generate($last_code, 8, 3);
-            $data = array('memo' => $memo, 'total' => $total, 'type' => 'activation_member', 'status' => 'pending', 'ledgers_id' => $ledger_id, 'customers_id' => $sponsor_id, 'agents_id' => $request->input('agents_id'), 'payment_type' => 'point', 'code' => $order_code, 'register' => $register, 'bv_activation_amount' => $bv_nett, 'customers_activation_id' => $member->id);
-            $order = Order::create($data);
-            //set order products
-            for ($i = 0; $i < $count_cart; $i++) {
+                // //ref 2
+                $ref2_fee_point_sale = 0;
+                $ref2_fee_point_upgrade = 0;
+                $member_get_flush_out = 0;
+                // $ref2_row = Member::find($ref1_row->ref_id);
+                // //ref 2 row
+                // if (!empty($ref2_row) && $ref2_row->ref_id > 0) {
+                //     $ref2_fee_row = NetworkFee::select('*')
+                //         ->Where('type', '=', 'activation')
+                //         ->Where('activation_type_id', '=', $ref2_row->activation_type_id)
+                //         ->get();
+                //     $sbv2_percen = $ref2_fee_row[0]->sbv;
+                //     $rsbv_g2_percen = $ref2_fee_row[0]->rsbv_g2;
+                //     $ref2_fee_point_sale = ($rsbv_g2_percen / 100) * ($sbv2_percen / 100) * $bv_nett;
+                //     if (($bv_nett > $min_plat) && $ref2_row->activation_type_id < 4) {
+                //         $ref2_fee_point_sale = ($rsbv_g2_percen / 100) * ($sbv2_percen / 100) * $min_plat;
+                //     }
+                //     $member_get_flush_out = $ref2_row->id;
+                //     if ($ref1_row->activation_type_id >= $ref2_row->activation_type_id) {
+                //         $member_get_flush_out = 0;
+                //     }
+                // }
+                if ($member_get_flush_out == 0) {
+                    $ref1_flush_out = 0;
+                }
+
+                $payment_type = 'point';
+                $status_delivery = 'received';
+                $status_order = 'pending';
+                if ($request->tokensale != '') {
+                    $payment_type = 'token';
+                    $status_delivery = 'delivered';
+                    $status_order = 'approved';
+                }
+
+                //set order
+                $warehouses_id = 1;
+                $last_code = $this->get_last_code('order-agent');
+                $order_code = acc_code_generate($last_code, 8, 3);
+                $data = array('memo' => $memo, 'total' => $total, 'type' => 'activation_member', 'status' => $status_order, 'ledgers_id' => $ledger_id, 'customers_id' => $sponsor_id, 'agents_id' => $request->input('agents_id'), 'payment_type' => $payment_type, 'code' => $order_code, 'register' => $register, 'bv_activation_amount' => $bv_nett, 'customers_activation_id' => $member->id, 'bv_total' => $bv_total, 'token_no' => $request->tokensale, 'status_delivery' => $status_delivery);
+                $order = Order::create($data);
                 //set order products
-                $order->products()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'price' => $cart_arr[$i]['harga']]);
-                //set order order details (inventory stock)
-                //check if package
-                $products_type = Product::select('type')
-                    ->where('id', $cart_arr[$i]['id'])
-                    ->get();
-                $products_type = json_decode($products_type, false);
-                if ($products_type[0]->type == 'package') {
-                    $package_items = Package::with('products')
+                for ($i = 0; $i < $count_cart; $i++) {
+                    //set order products
+                    $order->products()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'price' => $cart_arr[$i]['harga']]);
+                    //set order order details (inventory stock)
+                    //check if package
+                    $products_type = Product::select('type')
                         ->where('id', $cart_arr[$i]['id'])
                         ->get();
-                    $package_items = json_decode($package_items, false);
-                    $package_items = $package_items[0]->products;
-                    //loop items
-                    foreach ($package_items as $key => $value) {
-                        $order->productdetails()->attach($value->id, ['quantity' => $cart_arr[$i]['qty'] * $value->pivot->quantity, 'type' => 'D', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $member->id]);
-                        $order->productdetails()->attach($value->id, ['quantity' => $cart_arr[$i]['qty'] * $value->pivot->quantity, 'type' => 'C', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $request->input('agents_id')]);
+                    $products_type = json_decode($products_type, false);
+                    if ($products_type[0]->type == 'package') {
+                        $package_items = Package::with('products')
+                            ->where('id', $cart_arr[$i]['id'])
+                            ->get();
+                        $package_items = json_decode($package_items, false);
+                        $package_items = $package_items[0]->products;
+                        //loop items
+                        foreach ($package_items as $key => $value) {
+                            $order->productdetails()->attach($value->id, ['quantity' => $cart_arr[$i]['qty'] * $value->pivot->quantity, 'type' => 'D', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $member->id]);
+                            $order->productdetails()->attach($value->id, ['quantity' => $cart_arr[$i]['qty'] * $value->pivot->quantity, 'type' => 'C', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $request->input('agents_id')]);
+                        }
+                    } else {
+                        $order->productdetails()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'type' => 'D', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $member->id]);
+                        $order->productdetails()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'type' => 'C', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $request->input('agents_id')]);
                     }
-                } else {
-                    $order->productdetails()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'type' => 'D', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $member->id]);
-                    $order->productdetails()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'type' => 'C', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $request->input('agents_id')]);
-                }
-            }
-
-            /*update member */
-            $parent_id = $this->set_parent($member->ref_id);
-            $activation_at = date('Y-m-d H:i:s');
-            $member->parent_id = $parent_id;
-            $member->activation_at = $activation_at;
-            $member->status = 'active';
-            $member->activation_type_id = $package_activation_type_id;
-            $member->save();
-            /*set order*/
-            //set def
-            $referal_id = $request->input('ref_id');
-            $agents_id = $request->input('agents_id');
-            $warehouses_id = 1;
-            $com_row = Member::select('*')
-                ->where('def', '=', '1')
-                ->get();
-            $com_id = $com_row[0]->id;
-
-            $ref2_id=0;
-                if (!empty($ref2_row) && $ref2_row->ref_id > 0) {
-                    $ref2_id=$ref2_row->id;
                 }
 
-            ProcessPairing::dispatch($order->id, $member->ref_id, $bv_total, $bvcv_row[0]->amount, $ref1_fee_point_sale, $ref1_fee_point_upgrade, $ref2_fee_point_sale, $ref2_fee_point_upgrade, $ref1_flush_out, $ledger_id, $cba2, $cbmart, $points_fee_id, $points_upg_id, $ref2_id, $memo, $member_get_flush_out, 0, 0);
+                /*update member */
+                $parent_id = $this->set_parent($member->ref_id);
+                $activation_at = date('Y-m-d H:i:s');
+                $member->parent_id = $parent_id;
+                $member->activation_at = $activation_at;
+                $member->status = 'pending';
+                $member->activation_type_id = $package_activation_type_id;
+                $member->owner_id = $member->id;
+                $member->save();
+                /*set order*/
+                //set def
+                $referal_id = $request->input('ref_id');
+                $agents_id = $request->input('agents_id');
+                $warehouses_id = 1;
+                $com_row = Member::select('*')
+                    ->where('def', '=', '1')
+                    ->get();
+                $com_id = $com_row[0]->id;
 
-            //set trf points from member to Usadha Bhakti (pending points)
-            $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Penambahan Poin dari (Pending Order) ' . $memo, 'customers_id' => $com_id]);
-            $order->points()->attach($points_id, ['amount' => $total, 'type' => 'C', 'status' => 'onhand', 'memo' => 'Pemotongan Poin dari ' . $memo, 'customers_id' => $sponsor_id]);
+                $ref2_id = 0;
+                // if (!empty($ref2_row) && $ref2_row->ref_id > 0) {
+                //     $ref2_id = $ref2_row->id;
+                // }
 
-            //set trf points cashback agent
-            $order->points()->attach($points_id, ['amount' => $cba2, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin (Cashback Agen 02) dari ' . $memo, 'customers_id' => $agents_id]);
-            //set trf points cashback agent ubb mart
-            if ($cbmart > 0) {
-                $order->points()->attach($points_id, ['amount' => $cbmart, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin (Komisi Agen UBB Mart) dari ' . $memo, 'customers_id' => $agent_row->ref_id]);
-            }
-            //set trf points from member to agent (onhold)
-            $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin dari (Penjualan Paket) ' . $memo, 'customers_id' => $agents_id]);            
+                //insert pairing info
+                $data = array('order_id' => $order->id, 'ref_id' => $member->ref_bin_id, 'bv_total' => $bv_total, 'bvcv_amount' => $bvcv_row[0]->amount, 'ref1_fee_point_sale' => $ref1_fee_point_sale, 'ref1_fee_point_upgrade' => $ref1_fee_point_upgrade, 'ref2_fee_point_sale' => $ref2_fee_point_sale, 'ref2_fee_point_upgrade' => $ref2_fee_point_upgrade, 'ref1_flush_out' => $ref1_flush_out, 'ledger_id' => $ledger_id, 'cba2' => $cba2, 'cbmart' => $cbmart, 'points_fee_id' => $points_fee_id, 'points_upg_id' => $points_upg_id, 'ref2_id' => $ref2_id, 'memo' => $memo, 'member_get_flush_out' => $member_get_flush_out, 'package_type' => 0, 'ref_fee_lev' => 0, 'customer_id' => $member->id);
+                $pairinginfo = PairingInfo::create($data);
 
-            //push notif to agent
-            $user_os = CustomerApi::find($agents_id);
-            $id_onesignal = $user_os->id_onesignal;
-            $memo = 'Order Masuk dari ' . $memo;
-            $register = date("Y-m-d");
-            //store to logs_notif
-            $data = ['register' => $register, 'customers_id' => $agents_id, 'memo' => $memo];
-            $logs = LogNotif::create($data);
-            //push notif
-            if (!empty($id_onesignal)) {
-                OneSignal::sendNotificationToUser(
-                    $memo,
-                    $id_onesignal,
-                    $url = null,
-                    $data = null,
-                    $buttons = null,
-                    $schedule = null
-                );
-            }
+                //set trf points from member to Usadha Bhakti (pending points)
+                $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Penambahan Poin dari (Pending Order) ' . $memo, 'customers_id' => $com_id]);
+                if ($request->tokensale == '') {
+                    $order->points()->attach($points_id, ['amount' => $total, 'type' => 'C', 'status' => 'onhand', 'memo' => 'Pemotongan Poin dari ' . $memo, 'customers_id' => $sponsor_id]);
+                }
 
-            foreach ($user as $key => $value) {
-                $user->password_raw = $password_raw;
-            }
+                //set trf points cashback agent
+                $order->points()->attach($points_id, ['amount' => $cba2, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin (Cashback Agen 02) dari ' . $memo, 'customers_id' => $agents_id]);
+                //set trf points cashback agent ubb mart
+                if ($cbmart > 0) {
+                    $order->points()->attach($points_id, ['amount' => $cbmart, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin (Komisi Agen UBB Mart) dari ' . $memo, 'customers_id' => $agent_row->ref_id]);
+                }
 
-            try {
-                Mail::to($request->input('email'))->send(new MemberEmail($user));
+                //set trf points from member to agent (onhold)
+                if ($request->tokensale == '') {
+                    $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin dari (Penjualan Paket) ' . $memo, 'customers_id' => $agents_id]);
+                }
+
+                //if using token sale
+                if ($request->tokensale != '') {
+                    $tokensales = Tokensale::where('code', $request->tokensale)
+                        ->where('status', '=', 'active')
+                        ->orderBy('id', 'DESC')
+                        ->first();
+                    $tokensales->status = 'closed';
+                    $tokensales->save();
+                    $this->orderCompleted($order->id);
+                }
+
+                //push notif to agent
+                $user_os = CustomerApi::find($agents_id);
+                $id_onesignal = $user_os->id_onesignal;
+                $memo = 'Order Masuk dari ' . $memo;
+                $register = date("Y-m-d");
+                //store to logs_notif
+                $data = ['register' => $register, 'customers_id' => $agents_id, 'memo' => $memo];
+                $logs = LogNotif::create($data);
+                //push notif
+                if (!empty($id_onesignal)) {
+                    OneSignal::sendNotificationToUser(
+                        $memo,
+                        $id_onesignal,
+                        $url = null,
+                        $data = null,
+                        $buttons = null,
+                        $schedule = null
+                    );
+                }
+
+                foreach ($user as $key => $value) {
+                    $user->password_raw = $password_raw;
+                }
+
+                try {
+                    Mail::to($request->input('email'))->send(new MemberEmail($user));
+                    return response()->json([
+                        'success' => true,
+                        'user' => $user,
+                    ]);
+                } catch (QueryException $exception) {
+                    return response()->json([
+                        'success' => true,
+                        'user' => $user,
+                    ]);
+                }
+            } else {
                 return response()->json([
-                    'success' => true,
-                    'user' => $user,
-                ]);
-            } catch (QueryException $exception) {
-                return response()->json([
-                    'success' => true,
-                    'user' => $user,
-                ]);
+                    'success' => false,
+                    'message' => 'Saldo Poin Member Tidak Mencukupi atau Stok Agen tidak mencukupi.' . $points_balance . '::' . $total,
+                ], 401);
             }
-        } else {
-            return response()->json([
-                'success' => false,
-                'message' => 'Saldo Poin Member Tidak Mencukupi.',
-            ], 401);
         }
     }
 
@@ -1319,297 +1607,315 @@ class CustomersApiController extends Controller
 
     public function upgradeCustPackage(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'id' => 'required',
-            'agents_id' => 'required',
-        ]);
-        if ($validator->fails()) {
+        if (env('MEMBER_ACTIV') == 0) {
             return response()->json([
                 'success' => false,
-                'message' => $validator->errors(),
+                'message' => 'Register Gagal, Status Activasi Dinonaktifkan Untuk Beberapa Waktu.',
             ], 401);
         } else {
-            //set member
-            $member = Member::find($request->input('id'));
-            $activation_type_id_old = $member->activation_type_id;
-            //get point member
-            $points_id = 1;
-            $points_upg_id = 2;
-            $points_fee_id = 4;
-            $points_debit = OrderPoint::where('customers_id', '=', $request->input('id'))
-                ->where('type', '=', 'D')
-                ->where('status', '=', 'onhand')
-                ->where('points_id', '=', 1)
-                ->sum('amount');
-            $points_credit = OrderPoint::where('customers_id', '=', $request->input('id'))
-                ->where('type', '=', 'C')
-                ->where('status', '=', 'onhand')
-                ->where('points_id', '=', 1)
-                ->sum('amount');
-            $points_balance = $points_debit - $points_credit;
-
-            //get package price & cogs
-            $total = 0;
-            $cogs_total = 0;
-            $bv_total = 0;
-            $cart_arr = $request->cart['item'];
-            $count_cart = count($cart_arr);
-            for ($i = 0; $i < $count_cart; $i++) {
-                $total += $cart_arr[$i]['qty'] * $cart_arr[$i]['harga'];
-                $product = Product::find($cart_arr[$i]['id']);
-                $cogs_total += $cart_arr[$i]['qty'] * $product->cogs;
-                $bv_total += $cart_arr[$i]['qty'] * $product->bv;
-            }
-            $package_activation_type_id = $request->activationtype;
-            $package_upgrade_type_id = $package_activation_type_id;
-            $fee_upgrade_type_id = $package_upgrade_type_id - 1;
-            $profit = $total - $cogs_total;
-
-            //get stock agent, loop package
-            $stock_status = 'true';
-            for ($i = 0; $i < $count_cart; $i++) {
-                $stock_debit = OrderDetails::where('owner', '=', $request->input('agents_id'))
-                    ->where('type', '=', 'D')
-                    ->where('status', '=', 'onhand')
-                    ->where('products_id', $cart_arr[$i]['id'])
-                    ->sum('quantity');
-                $stock_credit = OrderDetails::where('owner', '=', $request->input('agents_id'))
-                    ->where('type', '=', 'C')
-                    ->where('status', '=', 'onhand')
-                    ->where('products_id', $cart_arr[$i]['id'])
-                    ->sum('quantity');
-                $stock_balance = $stock_debit - $stock_credit;
-                if ($stock_balance < $cart_arr[$i]['qty']) {
-                    $stock_status = 'false';
-                }
-            }
-
-            //compare total to point belanja
-            if ($points_balance >= $total) {
-                //init
-                $register = date("Y-m-d");
-                $memo = 'Upgrade Member ' . $member->code . "-" . $member->name;
-                /* proceed ledger */
-                $data = ['register' => $register, 'title' => $memo, 'memo' => $memo, 'status' => 'pending'];
-                $ledger = Ledger::create($data);
-                $ledger_id = $ledger->id;
-                //set ledger entry arr
-                //CBA 1
-                $networkfee1_row = NetworkFee::select('*')
-                    ->Where('code', '=', 'CBA01')
-                    ->get();
-                $cba1 = (($networkfee1_row[0]->amount) / 100) * $total;
-                //chech if agent has referal
-                $cbmart = 0;
-                //CBA 2
-                $networkfee2_row = NetworkFee::select('*')
-                    ->Where('code', '=', 'CBA02')
-                    ->get();
-                $cba2 = (($networkfee2_row[0]->amount) / 100) * $total;
-                $agent_row = Member::find($request->input('agents_id'));
-                // if ($agent_row->ref_id > 0) {
-                //     //CB Mart
-                //     $cbmart_row = NetworkFee::select('*')
-                //         ->Where('code', '=', 'CBMART')
-                //         ->get();
-                //     $cbmart = (($cbmart_row[0]->amount) / 100) * $total;
-                //     $cba2 = (($networkfee2_row[0]->amount - $cbmart_row[0]->amount) / 100) * $total;
-                // }
-                //check type package activation
-                // $package_obj = Package::find($request->input('package_id'));
-                //set ref fee
-                $package_network_row = NetworkFee::select('*')
-                    ->Where('type', '=', 'activation')
-                    ->Where('activation_type_id', '=', $fee_upgrade_type_id)
-                    ->get();
-                //BVCV
-                $bvcv_row = NetworkFee::select('*')
-                    ->Where('code', '=', 'BVCV')
-                    ->get();
-                //BVPO
-                $bvpo_row = NetworkFee::select('*')
-                    ->Where('code', '=', 'BVPO')
-                    ->get();
-                $bvcv = (($bvcv_row[0]->amount) / 100) * $bv_total;
-                $bv_nett = $bv_total - $bvcv;
-
-                //package activation type
-                $package_activation_row = Activation::select('type', 'bv_min', 'bv_max')
-                    ->Where('id', '=', $fee_upgrade_type_id)
-                    ->get();
-                //get BV (min platinum)
-                $min_plat_row = Activation::select('bv_min', 'bv_max')
-                    ->Where('id', '=', 4)
-                    ->first();
-                $min_plat = $min_plat_row->bv_min * $bvpo_row[0]->amount;
-                //package referal fee
-                //ref 1 package fee
-                $sbv_percen = $package_network_row[0]->sbv;
-                $rsbv_g1_percen = $package_network_row[0]->rsbv_g1;
-                $ref1_fee_point_sale_def = ($rsbv_g1_percen / 100) * ($sbv_percen / 100) * $bv_nett;
-                if (($bv_nett > $min_plat) && $package_activation_type_id < 4) {
-                    $ref1_fee_point_sale_def = ($rsbv_g1_percen / 100) * ($sbv_percen / 100) * $min_plat;
-                }
-                //ref 2 package fee
-                $sbv_percen = $package_network_row[0]->sbv;
-                $rsbv_g2_percen = $package_network_row[0]->rsbv_g2;
-                $ref2_fee_point_sale_def = ($rsbv_g2_percen / 100) * ($sbv_percen / 100) * $bv_nett;
-                if (($bv_nett > $min_plat) && $package_activation_type_id < 4) {
-                    $ref2_fee_point_sale_def = ($rsbv_g2_percen / 100) * ($sbv_percen / 100) * $min_plat;
-                }
-
-                //ref 1
-                $ref1_fee_point_sale = 0;
-                $ref1_fee_point_upgrade = 0;
-                $ref1_flush_out = 0;
-                $ref1_row = Member::find($member->ref_id);
-                //ref 1 row
-                if (!empty($ref1_row) && $ref1_row->ref_id > 0) {
-                    $ref1_fee_row = NetworkFee::select('*')
-                        ->Where('type', '=', 'activation')
-                        ->Where('activation_type_id', '=', $ref1_row->activation_type_id)
-                        ->get();
-                    $sbv1_percen = $ref1_fee_row[0]->sbv;
-                    $rsbv_g1_percen = $ref1_fee_row[0]->rsbv_g1;
-                    $ref1_fee_point_sale = ($rsbv_g1_percen / 100) * ($sbv1_percen / 100) * $bv_nett;
-                    if (($bv_nett > $min_plat) && $ref1_row->activation_type_id < 4) {
-                        $ref1_fee_point_sale = ($rsbv_g1_percen / 100) * ($sbv1_percen / 100) * $min_plat;
-                    }
-                    if ($ref1_fee_point_sale_def > $ref1_fee_point_sale) {
-                        $ref1_flush_out = $ref1_fee_point_sale_def - $ref1_fee_point_sale;
-                    }
-                }
-
-                //ref 2
-                $ref2_fee_point_sale = 0;
-                $ref2_fee_point_upgrade = 0;
-                $member_get_flush_out = 0;
-                $ref2_row = Member::find($ref1_row->ref_id);
-                //ref 2 row
-                if (!empty($ref2_row) && $ref2_row->ref_id > 0) {
-                    $ref2_fee_row = NetworkFee::select('*')
-                        ->Where('type', '=', 'activation')
-                        ->Where('activation_type_id', '=', $ref2_row->activation_type_id)
-                        ->get();
-                    $sbv2_percen = $ref2_fee_row[0]->sbv;
-                    $rsbv_g2_percen = $ref2_fee_row[0]->rsbv_g2;
-                    $ref2_fee_point_sale = ($rsbv_g2_percen / 100) * ($sbv2_percen / 100) * $bv_nett;
-                    if (($bv_nett > $min_plat) && $ref2_row->activation_type_id < 4) {
-                        $ref2_fee_point_sale = ($rsbv_g2_percen / 100) * ($sbv2_percen / 100) * $min_plat;
-                    }
-                    $member_get_flush_out = $ref2_row->id;
-                    if ($ref1_row->activation_type_id >= $ref2_row->activation_type_id) {
-                        $member_get_flush_out = 0;
-                    }
-                }
-                if ($member_get_flush_out == 0) {
-                    $ref1_flush_out = 0;
-                }
-
-                //set order
-                $warehouses_id = 1;
-                $last_code = $this->get_last_code('order-agent');
-                $order_code = acc_code_generate($last_code, 8, 3);
-                $data = array('memo' => $memo, 'total' => $total, 'type' => 'activation_member', 'status' => 'pending', 'ledgers_id' => $ledger_id, 'customers_id' => $request->input('id'), 'agents_id' => $request->input('agents_id'), 'payment_type' => 'point', 'code' => $order_code, 'register' => $register, 'bv_activation_amount' => $bv_nett, 'activation_type_id_old' => $activation_type_id_old, 'customers_activation_id' => $request->input('id'));
-                $order = Order::create($data);
-                //set order products
-                for ($i = 0; $i < $count_cart; $i++) {
-                    //set order products
-                    $order->products()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'price' => $cart_arr[$i]['harga']]);
-                    //set order order details (inventory stock)
-                    //check if package
-                    $products_type = Product::select('type')
-                        ->where('id', $cart_arr[$i]['id'])
-                        ->get();
-                    $products_type = json_decode($products_type, false);
-                    if ($products_type[0]->type == 'package') {
-                        $package_items = Package::with('products')
-                            ->where('id', $cart_arr[$i]['id'])
-                            ->get();
-                        $package_items = json_decode($package_items, false);
-                        $package_items = $package_items[0]->products;
-                        //loop items
-                        foreach ($package_items as $key => $value) {
-                            $order->productdetails()->attach($value->id, ['quantity' => $cart_arr[$i]['qty'] * $value->pivot->quantity, 'type' => 'D', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $member->id]);
-                            $order->productdetails()->attach($value->id, ['quantity' => $cart_arr[$i]['qty'] * $value->pivot->quantity, 'type' => 'C', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $request->input('agents_id')]);
-                        }
-                    } else {
-                        $order->productdetails()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'type' => 'D', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $member->id]);
-                        $order->productdetails()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'type' => 'C', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $request->input('agents_id')]);
-                    }
-                }
-
-                /*update member */
-                $parent_id = $this->set_parent($member->ref_id);
-                $activation_at = date('Y-m-d H:i:s');
-                //$member->parent_id = $parent_id;
-                //$member->activation_at = $activation_at;
-                //$member->status = 'active';
-                $member->activation_type_id = $package_upgrade_type_id;
-                $member->save();
-                /*set order*/
-                //set def
-                $referal_id = $request->input('id');
-                $agents_id = $request->input('agents_id');
-                $warehouses_id = 1;
-                $com_row = Member::select('*')
-                    ->where('def', '=', '1')
-                    ->get();
-                $com_id = $com_row[0]->id;
-
-                $ref2_id=0;
-                if (!empty($ref2_row) && $ref2_row->ref_id > 0) {
-                    $ref2_id=$ref2_row->id;
-                }
-
-                ProcessPairing::dispatch($order->id, $member->ref_id, $bv_total, $bvcv_row[0]->amount, $ref1_fee_point_sale, $ref1_fee_point_upgrade, $ref2_fee_point_sale, $ref2_fee_point_upgrade, $ref1_flush_out, $ledger_id, $cba2, $cbmart, $points_fee_id, $points_upg_id, $ref2_id, $memo, $member_get_flush_out, 0, 0);
-
-                //set trf points from member to Usadha Bhakti (pending points)
-                $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Penambahan Poin dari (Pending Order) ' . $memo, 'customers_id' => $com_id]);
-                $order->points()->attach($points_id, ['amount' => $total, 'type' => 'C', 'status' => 'onhand', 'memo' => 'Pemotongan Poin dari ' . $memo, 'customers_id' => $referal_id]);
-
-                //set trf points cashback agent
-                $order->points()->attach($points_id, ['amount' => $cba2, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin (Cashback Agen 02) dari ' . $memo, 'customers_id' => $agents_id]);
-                //set trf points cashback agent ubb mart
-                if ($cbmart > 0) {
-                    $order->points()->attach($points_id, ['amount' => $cbmart, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin (Komisi Agen UBB Mart) dari ' . $memo, 'customers_id' => $agent_row->ref_id]);
-                }
-                //set trf points from member to agent (onhold)
-                $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin dari (Penjualan Paket) ' . $memo, 'customers_id' => $agents_id]);                
-
-                //push notif to agent
-                $user_os = CustomerApi::find($agents_id);
-                $id_onesignal = $user_os->id_onesignal;
-                $memo = 'Order Masuk dari ' . $memo;
-                $register = date("Y-m-d");
-                //store to logs_notif
-                $data = ['register' => $register, 'customers_id' => $agents_id, 'memo' => $memo];
-                $logs = LogNotif::create($data);
-                //push notif
-                if (!empty($id_onesignal)) {
-                    OneSignal::sendNotificationToUser(
-                        $memo,
-                        $id_onesignal,
-                        $url = null,
-                        $data = null,
-                        $buttons = null,
-                        $schedule = null
-                    );}
-                $member_upg = CustomerApi::with('activations')->where('id', $member->id)->first();
-                $member_upg->ref_link = "https://admin.belogherbal.com/member?ref=" . Hashids::encode($member->id);
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Aktivasi Member Berhasil!',
-                    'data' => $member_upg,
-                ]);
-            } else {
+            $validator = Validator::make($request->all(), [
+                'id' => 'required',
+                'agents_id' => 'required',
+            ]);
+            if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Poin atau Stok Barang Tidak Mencukupi! Poin Balance: ' . $points_balance . " Total package: " . $total . " Stok Agent: " . $stock_balance,
+                    'message' => $validator->errors(),
                 ], 401);
+            } else {
+                //set member
+                $member = Member::find($request->input('id'));
+
+                //check up status
+                // $status_list_upline = $this->status_list_upline($member->slot_x, $member->slot_y);
+                // if ($status_list_upline['status'] == 0) {
+                //     return response()->json([
+                //         'success' => false,
+                //         'message' => 'Register Gagal, Status Upline masih ada yang belum activ.',
+                //     ], 401);
+                // }
+
+                $activation_type_id_old = $member->activation_type_id;
+                //get point member
+                $points_id = 1;
+                $points_upg_id = 2;
+                $points_fee_id = 4;
+                $points_debit = OrderPoint::where('customers_id', '=', $request->input('id'))
+                    ->where('type', '=', 'D')
+                    ->where('status', '=', 'onhand')
+                    ->where('points_id', '=', 1)
+                    ->sum('amount');
+                $points_credit = OrderPoint::where('customers_id', '=', $request->input('id'))
+                    ->where('type', '=', 'C')
+                    ->where('status', '=', 'onhand')
+                    ->where('points_id', '=', 1)
+                    ->sum('amount');
+                $points_balance = $points_debit - $points_credit;
+
+                //get package price & cogs
+                $total = 0;
+                $cogs_total = 0;
+                $bv_total = 0;
+                $cart_arr = $request->cart['item'];
+                $count_cart = count($cart_arr);
+                for ($i = 0; $i < $count_cart; $i++) {
+                    $total += $cart_arr[$i]['qty'] * $cart_arr[$i]['harga'];
+                    $product = Product::find($cart_arr[$i]['id']);
+                    $cogs_total += $cart_arr[$i]['qty'] * $product->cogs;
+                    $bv_total += $cart_arr[$i]['qty'] * $product->bv;
+                }
+                $package_activation_type_id = $request->activationtype;
+                $package_upgrade_type_id = $package_activation_type_id;
+                $fee_upgrade_type_id = $package_upgrade_type_id - 1;
+                $profit = $total - $cogs_total;
+
+                //get stock agent, loop package
+                $stock_status = 'true';
+                for ($i = 0; $i < $count_cart; $i++) {
+                    $stock_debit = OrderDetails::where('owner', '=', $request->input('agents_id'))
+                        ->where('type', '=', 'D')
+                        ->where('status', '=', 'onhand')
+                        ->where('products_id', $cart_arr[$i]['id'])
+                        ->sum('quantity');
+                    $stock_credit = OrderDetails::where('owner', '=', $request->input('agents_id'))
+                        ->where('type', '=', 'C')
+                        ->where('status', '=', 'onhand')
+                        ->where('products_id', $cart_arr[$i]['id'])
+                        ->sum('quantity');
+                    $stock_balance = $stock_debit - $stock_credit;
+                    if ($stock_balance < $cart_arr[$i]['qty']) {
+                        $stock_status = 'false';
+                    }
+                }
+
+                //compare total to point belanja
+                if ($points_balance >= $total) {
+                    //init
+                    $register = date("Y-m-d");
+                    $memo = 'Upgrade Member ' . $member->code . "-" . $member->name;
+                    /* proceed ledger */
+                    $data = ['register' => $register, 'title' => $memo, 'memo' => $memo, 'status' => 'pending'];
+                    $ledger = Ledger::create($data);
+                    $ledger_id = $ledger->id;
+                    //set ledger entry arr
+                    //CBA 1
+                    $networkfee1_row = NetworkFee::select('*')
+                        ->Where('code', '=', 'CBA01')
+                        ->get();
+                    $cba1 = (($networkfee1_row[0]->amount) / 100) * $total;
+                    //chech if agent has referal
+                    $cbmart = 0;
+                    //CBA 2
+                    $networkfee2_row = NetworkFee::select('*')
+                        ->Where('code', '=', 'CBA02')
+                        ->get();
+                    $cba2 = (($networkfee2_row[0]->amount) / 100) * $total;
+                    $agent_row = Member::find($request->input('agents_id'));
+                    // if ($agent_row->ref_id > 0) {
+                    //     //CB Mart
+                    //     $cbmart_row = NetworkFee::select('*')
+                    //         ->Where('code', '=', 'CBMART')
+                    //         ->get();
+                    //     $cbmart = (($cbmart_row[0]->amount) / 100) * $total;
+                    //     $cba2 = (($networkfee2_row[0]->amount - $cbmart_row[0]->amount) / 100) * $total;
+                    // }
+                    //check type package activation
+                    // $package_obj = Package::find($request->input('package_id'));
+                    //set ref fee
+                    $package_network_row = NetworkFee::select('*')
+                        ->Where('type', '=', 'activation')
+                        ->Where('activation_type_id', '=', $fee_upgrade_type_id)
+                        ->get();
+                    //BVCV
+                    $bvcv_row = NetworkFee::select('*')
+                        ->Where('code', '=', 'BVCV')
+                        ->get();
+                    //BVPO
+                    $bvpo_row = NetworkFee::select('*')
+                        ->Where('code', '=', 'BVPO')
+                        ->get();
+                    $bvcv = (($bvcv_row[0]->amount) / 100) * $bv_total;
+                    $bv_nett = $bv_total - $bvcv;
+
+                    //package activation type
+                    $package_activation_row = Activation::select('type', 'bv_min', 'bv_max')
+                        ->Where('id', '=', $fee_upgrade_type_id)
+                        ->get();
+                    //get BV (min platinum)
+                    $min_plat_row = Activation::select('bv_min', 'bv_max')
+                        ->Where('id', '=', 4)
+                        ->first();
+                    $min_plat = $min_plat_row->bv_min * $bvpo_row[0]->amount;
+                    //package referal fee
+                    //ref 1 package fee
+                    $sbv_percen = $package_network_row[0]->sbv;
+                    $rsbv_g1_percen = $package_network_row[0]->rsbv_g1;
+                    $ref1_fee_point_sale_def = ($rsbv_g1_percen / 100) * ($sbv_percen / 100) * $bv_nett;
+                    if (($bv_nett > $min_plat) && $package_activation_type_id < 4) {
+                        $ref1_fee_point_sale_def = ($rsbv_g1_percen / 100) * ($sbv_percen / 100) * $min_plat;
+                    }
+                    // //ref 2 package fee
+                    // $sbv_percen = $package_network_row[0]->sbv;
+                    // $rsbv_g2_percen = $package_network_row[0]->rsbv_g2;
+                    // $ref2_fee_point_sale_def = ($rsbv_g2_percen / 100) * ($sbv_percen / 100) * $bv_nett;
+                    // if (($bv_nett > $min_plat) && $package_activation_type_id < 4) {
+                    //     $ref2_fee_point_sale_def = ($rsbv_g2_percen / 100) * ($sbv_percen / 100) * $min_plat;
+                    // }
+
+                    //ref 1
+                    $ref1_fee_point_sale = 0;
+                    $ref1_fee_point_upgrade = 0;
+                    $ref1_flush_out = 0;
+                    $ref1_row = Member::find($member->ref_bin_id);
+                    //ref 1 row
+                    if (!empty($ref1_row) && $ref1_row->ref_bin_id > 1) {
+                        $ref1_fee_row = NetworkFee::select('*')
+                            ->Where('type', '=', 'activation')
+                            ->Where('activation_type_id', '=', $ref1_row->activation_type_id)
+                            ->get();
+                        $sbv1_percen = $ref1_fee_row[0]->sbv;
+                        $rsbv_g1_percen = $ref1_fee_row[0]->rsbv_g1;
+                        $ref1_fee_point_sale = ($rsbv_g1_percen / 100) * ($sbv1_percen / 100) * $bv_nett;
+                        if (($bv_nett > $min_plat) && $ref1_row->activation_type_id < 4) {
+                            //$ref1_fee_point_sale = ($rsbv_g1_percen / 100) * ($sbv1_percen / 100) * $min_plat;
+                        }
+                        if ($ref1_fee_point_sale_def > $ref1_fee_point_sale) {
+                            //$ref1_flush_out = $ref1_fee_point_sale_def - $ref1_fee_point_sale;
+                        }
+                    }
+
+                    //ref 2
+                    $ref2_fee_point_sale = 0;
+                    $ref2_fee_point_upgrade = 0;
+                    $member_get_flush_out = 0;
+                    // $ref2_row = Member::find($ref1_row->ref_id);
+                    // //ref 2 row
+                    // if (!empty($ref2_row) && $ref2_row->ref_id > 0) {
+                    //     $ref2_fee_row = NetworkFee::select('*')
+                    //         ->Where('type', '=', 'activation')
+                    //         ->Where('activation_type_id', '=', $ref2_row->activation_type_id)
+                    //         ->get();
+                    //     $sbv2_percen = $ref2_fee_row[0]->sbv;
+                    //     $rsbv_g2_percen = $ref2_fee_row[0]->rsbv_g2;
+                    //     $ref2_fee_point_sale = ($rsbv_g2_percen / 100) * ($sbv2_percen / 100) * $bv_nett;
+                    //     if (($bv_nett > $min_plat) && $ref2_row->activation_type_id < 4) {
+                    //         $ref2_fee_point_sale = ($rsbv_g2_percen / 100) * ($sbv2_percen / 100) * $min_plat;
+                    //     }
+                    //     $member_get_flush_out = $ref2_row->id;
+                    //     if ($ref1_row->activation_type_id >= $ref2_row->activation_type_id) {
+                    //         $member_get_flush_out = 0;
+                    //     }
+                    // }
+                    if ($member_get_flush_out == 0) {
+                        $ref1_flush_out = 0;
+                    }
+
+                    //set order
+                    $warehouses_id = 1;
+                    $last_code = $this->get_last_code('order-agent');
+                    $order_code = acc_code_generate($last_code, 8, 3);
+                    $data = array('memo' => $memo, 'total' => $total, 'type' => 'activation_member', 'status' => 'pending', 'ledgers_id' => $ledger_id, 'customers_id' => $request->input('id'), 'agents_id' => $request->input('agents_id'), 'payment_type' => 'point', 'code' => $order_code, 'register' => $register, 'bv_activation_amount' => $bv_nett, 'activation_type_id_old' => $activation_type_id_old, 'customers_activation_id' => $request->input('id'), 'activation_type_id' => $package_upgrade_type_id, 'bv_total' => $bv_total);
+                    $order = Order::create($data);
+                    //set order products
+                    for ($i = 0; $i < $count_cart; $i++) {
+                        //set order products
+                        $order->products()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'price' => $cart_arr[$i]['harga']]);
+                        //set order order details (inventory stock)
+                        //check if package
+                        $products_type = Product::select('type')
+                            ->where('id', $cart_arr[$i]['id'])
+                            ->get();
+                        $products_type = json_decode($products_type, false);
+                        if ($products_type[0]->type == 'package') {
+                            $package_items = Package::with('products')
+                                ->where('id', $cart_arr[$i]['id'])
+                                ->get();
+                            $package_items = json_decode($package_items, false);
+                            $package_items = $package_items[0]->products;
+                            //loop items
+                            foreach ($package_items as $key => $value) {
+                                $order->productdetails()->attach($value->id, ['quantity' => $cart_arr[$i]['qty'] * $value->pivot->quantity, 'type' => 'D', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $member->id]);
+                                $order->productdetails()->attach($value->id, ['quantity' => $cart_arr[$i]['qty'] * $value->pivot->quantity, 'type' => 'C', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $request->input('agents_id')]);
+                            }
+                        } else {
+                            $order->productdetails()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'type' => 'D', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $member->id]);
+                            $order->productdetails()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'type' => 'C', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $request->input('agents_id')]);
+                        }
+                    }
+
+                    /*update member */
+                    $parent_id = $this->set_parent($member->ref_id);
+                    $activation_at = date('Y-m-d H:i:s');
+                    //$member->parent_id = $parent_id;
+                    //$member->activation_at = $activation_at;
+                    //$member->status = 'active';
+                    //$member->activation_type_id = $package_upgrade_type_id;
+                    //$member->save();
+                    /*set order*/
+                    //set def
+                    $referal_id = $request->input('id');
+                    $agents_id = $request->input('agents_id');
+                    $warehouses_id = 1;
+                    $com_row = Member::select('*')
+                        ->where('def', '=', '1')
+                        ->get();
+                    $com_id = $com_row[0]->id;
+
+                    $ref2_id = 0;
+                    // if (!empty($ref2_row) && $ref2_row->ref_id > 0) {
+                    //     $ref2_id = $ref2_row->id;
+                    // }
+
+                    //insert pairing info
+                    $data = array('order_id' => $order->id, 'ref_id' => $member->ref_bin_id, 'bv_total' => $bv_total, 'bvcv_amount' => $bvcv_row[0]->amount, 'ref1_fee_point_sale' => $ref1_fee_point_sale, 'ref1_fee_point_upgrade' => $ref1_fee_point_upgrade, 'ref2_fee_point_sale' => $ref2_fee_point_sale, 'ref2_fee_point_upgrade' => $ref2_fee_point_upgrade, 'ref1_flush_out' => $ref1_flush_out, 'ledger_id' => $ledger_id, 'cba2' => $cba2, 'cbmart' => $cbmart, 'points_fee_id' => $points_fee_id, 'points_upg_id' => $points_upg_id, 'ref2_id' => $ref2_id, 'memo' => $memo, 'member_get_flush_out' => $member_get_flush_out, 'package_type' => 0, 'ref_fee_lev' => 0, 'customer_id' => $member->id);
+                    $pairinginfo = PairingInfo::create($data);
+
+                    //set trf points from member to Usadha Bhakti (pending points)
+                    $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Penambahan Poin dari (Pending Order) ' . $memo, 'customers_id' => $com_id]);
+                    $order->points()->attach($points_id, ['amount' => $total, 'type' => 'C', 'status' => 'onhand', 'memo' => 'Pemotongan Poin dari ' . $memo, 'customers_id' => $referal_id]);
+
+                    //set trf points cashback agent
+                    $order->points()->attach($points_id, ['amount' => $cba2, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin (Cashback Agen 02) dari ' . $memo, 'customers_id' => $agents_id]);
+                    //set trf points cashback agent ubb mart
+                    if ($cbmart > 0) {
+                        $order->points()->attach($points_id, ['amount' => $cbmart, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin (Komisi Agen UBB Mart) dari ' . $memo, 'customers_id' => $agent_row->ref_id]);
+                    }
+                    //set trf points from member to agent (onhold)
+                    $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin dari (Penjualan Paket) ' . $memo, 'customers_id' => $agents_id]);
+
+                    //push notif to agent
+                    $user_os = CustomerApi::find($agents_id);
+                    $id_onesignal = $user_os->id_onesignal;
+                    $memo = 'Order Masuk dari ' . $memo;
+                    $register = date("Y-m-d");
+                    //store to logs_notif
+                    $data = ['register' => $register, 'customers_id' => $agents_id, 'memo' => $memo];
+                    $logs = LogNotif::create($data);
+                    //push notif
+                    if (!empty($id_onesignal)) {
+                        OneSignal::sendNotificationToUser(
+                            $memo,
+                            $id_onesignal,
+                            $url = null,
+                            $data = null,
+                            $buttons = null,
+                            $schedule = null
+                        );}
+                    $member_upg = CustomerApi::with('activations')->where('id', $member->id)->first();
+                    $member_upg->ref_link = "https://admin.belogherbal.com/member?ref=" . Hashids::encode($member->id);
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Aktivasi Member Berhasil!',
+                        'data' => $member_upg,
+                    ]);
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Poin atau Stok Barang Tidak Mencukupi! Poin Balance: ' . $points_balance . " Total package: " . $total . " Stok Agent: " . $stock_balance,
+                    ], 401);
+                }
             }
         }
-
     }
 
     public function upgrade(Request $request)
@@ -1941,297 +2247,37 @@ class CustomersApiController extends Controller
 
     public function activateCustPackage(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'id' => 'required',
-            'agents_id' => 'required',
-        ]);
-        if ($validator->fails()) {
+        if (env('MEMBER_ACTIV') == 0) {
             return response()->json([
                 'success' => false,
-                'message' => $validator->errors(),
+                'message' => 'Register Gagal, Status Activasi Dinonaktifkan Untuk Beberapa Waktu.',
             ], 401);
         } else {
-            //set member
-            $member = Member::find($request->input('id'));
-            //get point member
-            $points_id = 1;
-            $points_upg_id = 2;
-            $points_fee_id = 4;
-            $points_debit = OrderPoint::where('customers_id', '=', $request->input('id'))
-                ->where('type', '=', 'D')
-                ->where('status', '=', 'onhand')
-                ->where('points_id', '=', 1)
-                ->sum('amount');
-            $points_credit = OrderPoint::where('customers_id', '=', $request->input('id'))
-                ->where('type', '=', 'C')
-                ->where('status', '=', 'onhand')
-                ->where('points_id', '=', 1)
-                ->sum('amount');
-            $points_balance = $points_debit - $points_credit;
-
-            //get package price & cogs
-            $total = 0;
-            $cogs_total = 0;
-            $bv_total = 0;
-            $cart_arr = $request->cart['item'];
-            $count_cart = count($cart_arr);
-            for ($i = 0; $i < $count_cart; $i++) {
-                $total += $cart_arr[$i]['qty'] * $cart_arr[$i]['harga'];
-                $product = Product::find($cart_arr[$i]['id']);
-                $cogs_total += $cart_arr[$i]['qty'] * $product->cogs;
-                $bv_total += $cart_arr[$i]['qty'] * $product->bv;
-            }
-            $package_activation_type_id = $request->activationtype;
-            $profit = $total - $cogs_total;
-
-            //get stock agent, loop package
-            $stock_status = 'true';
-            for ($i = 0; $i < $count_cart; $i++) {
-                $stock_debit = OrderDetails::where('owner', '=', $request->input('agents_id'))
-                    ->where('type', '=', 'D')
-                    ->where('status', '=', 'onhand')
-                    ->where('products_id', $cart_arr[$i]['id'])
-                    ->sum('quantity');
-                $stock_credit = OrderDetails::where('owner', '=', $request->input('agents_id'))
-                    ->where('type', '=', 'C')
-                    ->where('status', '=', 'onhand')
-                    ->where('products_id', $cart_arr[$i]['id'])
-                    ->sum('quantity');
-                $stock_balance = $stock_debit - $stock_credit;
-                if ($stock_balance < $cart_arr[$i]['qty']) {
-                    $stock_status = 'false';
-                }
-            }
-
-            //compare total to point belanja
-            if ($points_balance >= $total && $member->status == 'pending') {
-                //init
-                $register = date("Y-m-d");
-                $memo = 'Aktivasi Member ' . $member->code . "-" . $member->name;
-                /* proceed ledger */
-                $data = ['register' => $register, 'title' => $memo, 'memo' => $memo, 'status' => 'pending'];
-                $ledger = Ledger::create($data);
-                $ledger_id = $ledger->id;
-                //set ledger entry arr
-                //CBA 1
-                $networkfee1_row = NetworkFee::select('*')
-                    ->Where('code', '=', 'CBA01')
-                    ->get();
-                $cba1 = (($networkfee1_row[0]->amount) / 100) * $total;
-                //chech if agent has referal
-                $cbmart = 0;
-                //CBA 2
-                $networkfee2_row = NetworkFee::select('*')
-                    ->Where('code', '=', 'CBA02')
-                    ->get();
-                $cba2 = (($networkfee2_row[0]->amount) / 100) * $total;
-                $agent_row = Member::find($request->input('agents_id'));
-                // if ($agent_row->ref_id > 0) {
-                //     //CB Mart
-                //     $cbmart_row = NetworkFee::select('*')
-                //         ->Where('code', '=', 'CBMART')
-                //         ->get();
-                //     $cbmart = (($cbmart_row[0]->amount) / 100) * $total;
-                //     $cba2 = (($networkfee2_row[0]->amount - $cbmart_row[0]->amount) / 100) * $total;
-                // }
-                //check type package activation
-                // $package_obj = Package::find($request->input('package_id'));
-                //set ref fee
-                $package_network_row = NetworkFee::select('*')
-                    ->Where('type', '=', 'activation')
-                    ->Where('activation_type_id', '=', $package_activation_type_id)
-                    ->get();
-                //BVCV
-                $bvcv_row = NetworkFee::select('*')
-                    ->Where('code', '=', 'BVCV')
-                    ->get();
-                //BVPO
-                $bvpo_row = NetworkFee::select('*')
-                    ->Where('code', '=', 'BVPO')
-                    ->get();
-                $bvcv = (($bvcv_row[0]->amount) / 100) * $bv_total;
-                $bv_nett = $bv_total - $bvcv;
-
-                //package activation type
-                $package_activation_row = Activation::select('type', 'bv_min', 'bv_max')
-                    ->Where('id', '=', $package_activation_type_id)
-                    ->get();
-                //get BV (min platinum)
-                $min_plat_row = Activation::select('bv_min', 'bv_max')
-                    ->Where('id', '=', 4)
-                    ->first();
-                $min_plat = $min_plat_row->bv_min * $bvpo_row[0]->amount;
-                //package referal fee
-                //ref 1 package fee
-                $sbv_percen = $package_network_row[0]->sbv;
-                $rsbv_g1_percen = $package_network_row[0]->rsbv_g1;
-                $ref1_fee_point_sale_def = ($rsbv_g1_percen / 100) * ($sbv_percen / 100) * $bv_nett;
-                if (($bv_nett > $min_plat) && $package_activation_type_id < 4) {
-                    $ref1_fee_point_sale_def = ($rsbv_g1_percen / 100) * ($sbv_percen / 100) * $min_plat;
-                }
-                //ref 2 package fee
-                $sbv_percen = $package_network_row[0]->sbv;
-                $rsbv_g2_percen = $package_network_row[0]->rsbv_g2;
-                $ref2_fee_point_sale_def = ($rsbv_g2_percen / 100) * ($sbv_percen / 100) * $bv_nett;
-                if (($bv_nett > $min_plat) && $package_activation_type_id < 4) {
-                    $ref2_fee_point_sale_def = ($rsbv_g2_percen / 100) * ($sbv_percen / 100) * $min_plat;
-                }
-
-                //ref 1
-                $ref1_fee_point_sale = 0;
-                $ref1_fee_point_upgrade = 0;
-                $ref1_flush_out = 0;
-                $ref1_row = Member::find($member->ref_id);
-                //ref 1 row
-                if (!empty($ref1_row) && $ref1_row->ref_id > 0) {
-                    $ref1_fee_row = NetworkFee::select('*')
-                        ->Where('type', '=', 'activation')
-                        ->Where('activation_type_id', '=', $ref1_row->activation_type_id)
-                        ->get();
-                    $sbv1_percen = $ref1_fee_row[0]->sbv;
-                    $rsbv_g1_percen = $ref1_fee_row[0]->rsbv_g1;
-                    $ref1_fee_point_sale = ($rsbv_g1_percen / 100) * ($sbv1_percen / 100) * $bv_nett;
-                    if (($bv_nett > $min_plat) && $ref1_row->activation_type_id < 4) {
-                        $ref1_fee_point_sale = ($rsbv_g1_percen / 100) * ($sbv1_percen / 100) * $min_plat;
-                    }
-                    if ($ref1_fee_point_sale_def > $ref1_fee_point_sale) {
-                        $ref1_flush_out = $ref1_fee_point_sale_def - $ref1_fee_point_sale;
-                    }
-                }
-
-                //ref 2
-                $ref2_fee_point_sale = 0;
-                $ref2_fee_point_upgrade = 0;
-                $member_get_flush_out = 0;
-                $ref2_row = Member::find($ref1_row->ref_id);
-                //ref 2 row
-                if (!empty($ref2_row) && $ref2_row->ref_id > 0) {
-                    $ref2_fee_row = NetworkFee::select('*')
-                        ->Where('type', '=', 'activation')
-                        ->Where('activation_type_id', '=', $ref2_row->activation_type_id)
-                        ->get();
-                    $sbv2_percen = $ref2_fee_row[0]->sbv;
-                    $rsbv_g2_percen = $ref2_fee_row[0]->rsbv_g2;
-                    $ref2_fee_point_sale = ($rsbv_g2_percen / 100) * ($sbv2_percen / 100) * $bv_nett;
-                    if (($bv_nett > $min_plat) && $ref2_row->activation_type_id < 4) {
-                        $ref2_fee_point_sale = ($rsbv_g2_percen / 100) * ($sbv2_percen / 100) * $min_plat;
-                    }
-                    $member_get_flush_out = $ref2_row->id;
-                    if ($ref1_row->activation_type_id >= $ref2_row->activation_type_id) {
-                        $member_get_flush_out = 0;
-                    }
-                }
-                if ($member_get_flush_out == 0) {
-                    $ref1_flush_out = 0;
-                }
-
-                //set order
-                $warehouses_id = 1;
-                $last_code = $this->get_last_code('order-agent');
-                $order_code = acc_code_generate($last_code, 8, 3);
-                $data = array('memo' => $memo, 'total' => $total, 'type' => 'activation_member', 'status' => 'pending', 'ledgers_id' => $ledger_id, 'customers_id' => $request->input('id'), 'agents_id' => $request->input('agents_id'), 'payment_type' => 'point', 'code' => $order_code, 'register' => $register, 'bv_activation_amount' => $bv_nett, 'customers_activation_id' => $request->input('id'));
-                $order = Order::create($data);
-                //set order products
-                for ($i = 0; $i < $count_cart; $i++) {
-                    //set order products
-                    $order->products()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'price' => $cart_arr[$i]['harga']]);
-                    //set order order details (inventory stock)
-                    //check if package
-                    $products_type = Product::select('type')
-                        ->where('id', $cart_arr[$i]['id'])
-                        ->get();
-                    $products_type = json_decode($products_type, false);
-                    if ($products_type[0]->type == 'package') {
-                        $package_items = Package::with('products')
-                            ->where('id', $cart_arr[$i]['id'])
-                            ->get();
-                        $package_items = json_decode($package_items, false);
-                        $package_items = $package_items[0]->products;
-                        //loop items
-                        foreach ($package_items as $key => $value) {
-                            $order->productdetails()->attach($value->id, ['quantity' => $cart_arr[$i]['qty'] * $value->pivot->quantity, 'type' => 'D', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $member->id]);
-                            $order->productdetails()->attach($value->id, ['quantity' => $cart_arr[$i]['qty'] * $value->pivot->quantity, 'type' => 'C', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $request->input('agents_id')]);
-                        }
-                    } else {
-                        $order->productdetails()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'type' => 'D', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $member->id]);
-                        $order->productdetails()->attach($cart_arr[$i]['id'], ['quantity' => $cart_arr[$i]['qty'], 'type' => 'C', 'status' => 'onhold', 'warehouses_id' => $warehouses_id, 'owner' => $request->input('agents_id')]);
-                    }
-                }
-
-                /*update member */
-                $parent_id = $this->set_parent($member->ref_id);
-                $activation_at = date('Y-m-d H:i:s');
-                $member->parent_id = $parent_id;
-                $member->activation_at = $activation_at;
-                $member->status = 'active';
-                $member->activation_type_id = $package_activation_type_id;
-                $member->name = $request->input('name');
-                $member->phone = $request->input('phone');
-                $member->email = $request->input('email');
-                $member->address = $request->input('address');
-                $member->save();
-                /*set order*/
-                //set def
-                $referal_id = $request->input('id');
-                $agents_id = $request->input('agents_id');
-                $warehouses_id = 1;
-                $com_row = Member::select('*')
-                    ->where('def', '=', '1')
-                    ->get();
-                $com_id = $com_row[0]->id;
-
-                $ref2_id=0;
-                if (!empty($ref2_row) && $ref2_row->ref_id > 0) {
-                    $ref2_id=$ref2_row->id;
-                }
-
-                ProcessPairing::dispatch($order->id, $member->ref_id, $bv_total, $bvcv_row[0]->amount, $ref1_fee_point_sale, $ref1_fee_point_upgrade, $ref2_fee_point_sale, $ref2_fee_point_upgrade, $ref1_flush_out, $ledger_id, $cba2, $cbmart, $points_fee_id, $points_upg_id, $ref2_id, $memo, $member_get_flush_out, 0, 0);
-
-                //set trf points from member to Usadha Bhakti (pending points)
-                $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhand', 'memo' => 'Penambahan Poin dari (Pending Order) ' . $memo, 'customers_id' => $com_id]);
-                $order->points()->attach($points_id, ['amount' => $total, 'type' => 'C', 'status' => 'onhand', 'memo' => 'Pemotongan Poin dari ' . $memo, 'customers_id' => $referal_id]);
-
-                //set trf points cashback agent
-                $order->points()->attach($points_id, ['amount' => $cba2, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin (Cashback Agen 02) dari ' . $memo, 'customers_id' => $agents_id]);
-                //set trf points cashback agent ubb mart
-                if ($cbmart > 0) {
-                    $order->points()->attach($points_id, ['amount' => $cbmart, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin (Komisi Agen UBB Mart) dari ' . $memo, 'customers_id' => $agent_row->ref_id]);
-                }
-                //set trf points from member to agent (onhold)
-                $order->points()->attach($points_id, ['amount' => $total, 'type' => 'D', 'status' => 'onhold', 'memo' => 'Penambahan Poin dari (Penjualan Paket) ' . $memo, 'customers_id' => $agents_id]);                
-
-                //push notif to agent
-                $user_os = CustomerApi::find($agents_id);
-                $id_onesignal = $user_os->id_onesignal;
-                $memo = 'Order Masuk dari ' . $memo;
-                $register = date("Y-m-d");
-                //store to logs_notif
-                $data = ['register' => $register, 'customers_id' => $agents_id, 'memo' => $memo];
-                $logs = LogNotif::create($data);
-                //push notif
-                if (!empty($id_onesignal)) {
-                    OneSignal::sendNotificationToUser(
-                        $memo,
-                        $id_onesignal,
-                        $url = null,
-                        $data = null,
-                        $buttons = null,
-                        $schedule = null
-                    );}
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Aktivasi Member Berhasil!',
-                    'data' => $member,
-                ]);
-            } else {
+            $validator = Validator::make($request->all(), [
+                'id' => 'required',
+                'agents_id' => 'required',
+            ]);
+            if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Poin atau Stok Barang Tidak Mencukupi! atau Member sudah aktif! Poin Balance: ' . $points_balance . " Total package: " . $total . " Stok Agent: " . $stock_balance . " Member Satus: " . $member->status,
+                    'message' => $validator->errors(),
                 ], 401);
+            } else {
+                $memberActivated = event(new MemberActivated($request));
+                if ($memberActivated[0]->status == 1) {                    
+                    return response()->json([
+                        'success' => true,
+                        'message' => $memberActivated[0]->message,
+                        'data' => $memberActivated[0]->data,
+                    ]);
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $memberActivated[0]->message,
+                    ], 401);
+                }
             }
         }
-
     }
 
     public function activate(Request $request)
@@ -2716,11 +2762,23 @@ class CustomersApiController extends Controller
         }
     }
 
+    public function resellerAgents()
+    {
+        $agents = CustomerApi::select('*')
+            ->where('type', 'agent')
+            ->where('status', 'active')
+            ->where('agent_type', 'reseller')
+            ->get();
+
+        return $agents;
+    }
+
     public function agents()
     {
         $agents = CustomerApi::select('*')
             ->where('type', 'agent')
             ->where('status', 'active')
+            ->where('agent_type', '!=', 'reseller')
             ->get();
 
         return $agents;
